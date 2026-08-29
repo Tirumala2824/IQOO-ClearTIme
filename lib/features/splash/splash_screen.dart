@@ -26,35 +26,41 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
     await Future.delayed(const Duration(milliseconds: 1200));
     if (!mounted) return;
 
-    final authState = ref.read(authControllerProvider);
-    final user = authState.user;
+    try {
+      final authState = ref.read(authControllerProvider);
+      final user = authState.user;
 
-    if (user == null) {
-      context.go(AppRoutes.login);
-      return;
-    }
-
-    if (user.isParent) {
-      await ref
-          .read(parentDashboardControllerProvider.notifier)
-          .loadDashboard(user.id);
-      final parentState = ref.read(parentDashboardControllerProvider);
-      if (!mounted) return;
-      if (!parentState.hasFamily) {
-        context.go(AppRoutes.onboarding);
-      } else {
-        context.go(AppRoutes.parent);
+      if (user == null) {
+        context.go(AppRoutes.login);
+        return;
       }
-    } else {
-      await ref
-          .read(childDashboardControllerProvider.notifier)
-          .loadDashboard(user.id);
-      final childState = ref.read(childDashboardControllerProvider);
-      if (!mounted) return;
-      if (!childState.hasFamily) {
-        context.go(AppRoutes.childJoinFamily);
+
+      if (user.isParent) {
+        await ref
+            .read(parentDashboardControllerProvider.notifier)
+            .loadDashboard(user.id);
+        final parentState = ref.read(parentDashboardControllerProvider);
+        if (!mounted) return;
+        if (!parentState.hasFamily) {
+          context.go(AppRoutes.onboarding);
+        } else {
+          context.go(AppRoutes.parent);
+        }
       } else {
-        context.go(AppRoutes.child);
+        await ref
+            .read(childDashboardControllerProvider.notifier)
+            .loadDashboard(user.id);
+        final childState = ref.read(childDashboardControllerProvider);
+        if (!mounted) return;
+        if (!childState.hasFamily) {
+          context.go(AppRoutes.childJoinFamily);
+        } else {
+          context.go(AppRoutes.child);
+        }
+      }
+    } catch (_) {
+      if (mounted) {
+        context.go(AppRoutes.login);
       }
     }
   }

@@ -5,11 +5,32 @@ import '../../../data/models/achievement_model.dart';
 import '../controllers/child_achievements_controller.dart';
 import '../controllers/child_missions_controller.dart';
 
-class ChildProgressScreen extends ConsumerWidget {
+import '../controllers/child_dashboard_controller.dart';
+
+class ChildProgressScreen extends ConsumerStatefulWidget {
   const ChildProgressScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ChildProgressScreen> createState() => _ChildProgressScreenState();
+}
+
+class _ChildProgressScreenState extends ConsumerState<ChildProgressScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final usage = ref.read(childDashboardControllerProvider).usageSummary;
+      ref.read(childAchievementsControllerProvider.notifier).evaluateAgainstAnalytics(
+        focusMinutes: usage.focusMinutes,
+        breakCount: usage.breakCount,
+        consecutiveDaysGoalMet: 3,
+        maxSingleFocusSession: usage.focusMinutes > 30 ? 30 : usage.focusMinutes,
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final achState = ref.watch(childAchievementsControllerProvider);
     final missionsState = ref.watch(childMissionsControllerProvider);
 

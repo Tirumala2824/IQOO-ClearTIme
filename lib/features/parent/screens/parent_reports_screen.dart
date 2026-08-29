@@ -117,7 +117,7 @@ class _ParentReportsScreenState extends ConsumerState<ParentReportsScreen>
                           subtitle: const Text(
                               'Receive periodic summaries of healthy digital balance'),
                           value: currentSettings.reportsEnabled,
-                          activeColor: AppTheme.parentPrimary,
+                          activeThumbColor: AppTheme.parentPrimary,
                           onChanged: (val) {
                             setModalState(() {
                               currentSettings =
@@ -130,7 +130,7 @@ class _ParentReportsScreenState extends ConsumerState<ParentReportsScreen>
 
                         // Frequency Dropdown
                         DropdownButtonFormField<ReportPeriod>(
-                          value: currentSettings.frequency,
+                          initialValue: currentSettings.frequency,
                           decoration:
                               const InputDecoration(labelText: 'Report Frequency'),
                           items: const [
@@ -161,7 +161,7 @@ class _ParentReportsScreenState extends ConsumerState<ParentReportsScreen>
 
                         // Detail Level Dropdown
                         DropdownButtonFormField<ReportDetailLevel>(
-                          value: currentSettings.detail,
+                          initialValue: currentSettings.detail,
                           decoration:
                               const InputDecoration(labelText: 'Detail Level'),
                           items: const [
@@ -198,7 +198,7 @@ class _ParentReportsScreenState extends ConsumerState<ParentReportsScreen>
                           subtitle: const Text(
                               'Receive in-app notification when a new snapshot is generated'),
                           value: currentSettings.notificationsEnabled,
-                          activeColor: AppTheme.parentPrimary,
+                          activeThumbColor: AppTheme.parentPrimary,
                           onChanged: (val) {
                             setModalState(() {
                               currentSettings = currentSettings.copyWith(

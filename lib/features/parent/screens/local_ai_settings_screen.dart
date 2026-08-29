@@ -5,6 +5,7 @@ import '../../../core/constants/app_routes.dart';
 import '../../../core/providers/providers.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/llm_models.dart';
+import '../../../services/llm/http_llm_provider.dart';
 
 class LocalAiSettingsScreen extends ConsumerStatefulWidget {
   const LocalAiSettingsScreen({super.key});
@@ -16,28 +17,34 @@ class LocalAiSettingsScreen extends ConsumerStatefulWidget {
 
 class _LocalAiSettingsScreenState extends ConsumerState<LocalAiSettingsScreen> {
   AISettings _settings = const AISettings();
-  ModelInfo? _modelInfo = const ModelInfo(
-    modelName: 'ClearTime-SLM-Nano',
-    version: '1.2.0',
-    contextLimit: 2048,
-    quantization: 'q4_k_m',
-    sizeMb: 380,
-    isLoaded: true,
-    engineType: 'On-Device Neural Engine',
-    memoryUsageMb: 280,
-  );
+  ModelInfo? _modelInfo;
   bool _isTesting = false;
   StructuredAIResponse? _testResult;
+
+  late TextEditingController _apiUrlController;
+  late TextEditingController _apiModelController;
+  late TextEditingController _apiKeyController;
 
   @override
   void initState() {
     super.initState();
+    _apiUrlController = TextEditingController();
+    _apiModelController = TextEditingController();
+    _apiKeyController = TextEditingController();
     _loadData();
+  }
+
+  @override
+  void dispose() {
+    _apiUrlController.dispose();
+    _apiModelController.dispose();
+    _apiKeyController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadData() async {
     final settingsRepo = ref.read(localAISettingsRepositoryProvider);
-    final llm = ref.read(localLlmProvider);
+    final llm = ref.read(activeLlmProvider);
 
     final settings = await settingsRepo.getSettings();
     final info = await llm.getModelInfo();
@@ -46,6 +53,9 @@ class _LocalAiSettingsScreenState extends ConsumerState<LocalAiSettingsScreen> {
       setState(() {
         _settings = settings;
         _modelInfo = info;
+        _apiUrlController.text = settings.apiUrl;
+        _apiModelController.text = settings.apiModel;
+        _apiKeyController.text = settings.apiKey;
       });
     }
   }
@@ -72,16 +82,81 @@ class _LocalAiSettingsScreenState extends ConsumerState<LocalAiSettingsScreen> {
     }
   }
 
+  Future<void> _toggleExternalApi(bool val) async {
+    final settingsRepo = ref.read(localAISettingsRepositoryProvider);
+    final newSettings = _settings.copyWith(useExternalApi: val);
+    await settingsRepo.saveSettings(newSettings);
+
+    setState(() {
+      _settings = newSettings;
+    });
+
+    // Update the LLM provider based on new settings
+    _applyLlmProvider();
+  }
+
+  Future<void> _saveApiConfig() async {
+    final settingsRepo = ref.read(localAISettingsRepositoryProvider);
+    final newSettings = _settings.copyWith(
+      apiUrl: _apiUrlController.text.trim(),
+      apiModel: _apiModelController.text.trim(),
+      apiKey: _apiKeyController.text.trim(),
+    );
+    await settingsRepo.saveSettings(newSettings);
+
+    setState(() {
+      _settings = newSettings;
+    });
+
+    // Apply the new LLM provider
+    _applyLlmProvider();
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('API configuration saved! Test inference below.'),
+          backgroundColor: AppTheme.successGreen,
+        ),
+      );
+    }
+  }
+
+  void _applyLlmProvider() {
+    if (_settings.useExternalApi && _settings.apiUrl.isNotEmpty && _settings.apiModel.isNotEmpty) {
+      final httpProvider = HttpLlmProvider(
+        apiUrl: _settings.apiUrl,
+        modelId: _settings.apiModel,
+        apiKey: _settings.apiKey,
+        temperature: _settings.temperature,
+        maxTokens: _settings.maxTokens,
+      );
+      ref.read(activeLlmProvider.notifier).state = httpProvider;
+    } else {
+      // Revert to on-device provider
+      ref.read(activeLlmProvider.notifier).state = ref.read(localLlmProvider);
+    }
+    // Refresh model info
+    _refreshModelInfo();
+  }
+
+  Future<void> _refreshModelInfo() async {
+    final llm = ref.read(activeLlmProvider);
+    final info = await llm.getModelInfo();
+    if (mounted) {
+      setState(() => _modelInfo = info);
+    }
+  }
+
   Future<void> _runQuickTest() async {
     setState(() {
       _isTesting = true;
       _testResult = null;
     });
 
-    final modelManager = ref.read(localModelManagerProvider);
-    final result = await modelManager.testModel(
+    final llm = ref.read(activeLlmProvider);
+    final result = await llm.testInference(
       testPrompt:
-          'Evaluate 120 minutes screen time with 45 minutes focused learning.',
+          'Evaluate 120 minutes screen time with 45 minutes focused learning. Respond with observations and recommendations.',
     );
 
     if (mounted) {
@@ -118,6 +193,10 @@ class _LocalAiSettingsScreenState extends ConsumerState<LocalAiSettingsScreen> {
                   _buildStatusCard(),
                   const SizedBox(height: 20),
 
+                  // External API Configuration Card (NEW)
+                  _buildExternalApiCard(),
+                  const SizedBox(height: 20),
+
                   // Active Model Card
                   _buildActiveModelCard(),
                   const SizedBox(height: 20),
@@ -135,11 +214,14 @@ class _LocalAiSettingsScreenState extends ConsumerState<LocalAiSettingsScreen> {
   }
 
   Widget _buildPrivacyBanner() {
+    final isExternalApi = _settings.useExternalApi;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [AppTheme.parentAccent, AppTheme.parentPrimary],
+        gradient: LinearGradient(
+          colors: isExternalApi
+              ? [AppTheme.warningOrange, AppTheme.childAccent]
+              : [AppTheme.parentAccent, AppTheme.parentPrimary],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -153,36 +235,45 @@ class _LocalAiSettingsScreenState extends ConsumerState<LocalAiSettingsScreen> {
               color: Colors.white.withAlpha((0.2 * 255).round()),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(Icons.security_rounded,
-                color: Colors.white, size: 28),
+            child: Icon(
+              isExternalApi ? Icons.cloud_rounded : Icons.security_rounded,
+              color: Colors.white,
+              size: 28,
+            ),
           ),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: const [
+              children: [
                 Text(
-                  '100% ON-DEVICE INTELLIGENCE',
-                  style: TextStyle(
+                  isExternalApi
+                      ? 'EXTERNAL API MODE'
+                      : '100% ON-DEVICE INTELLIGENCE',
+                  style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
                     letterSpacing: 1.1,
                     fontSize: 11,
                   ),
                 ),
-                SizedBox(height: 4),
+                const SizedBox(height: 4),
                 Text(
-                  'Zero Cloud LLM Dependency',
-                  style: TextStyle(
+                  isExternalApi
+                      ? 'Connected to External LLM'
+                      : 'Zero Cloud LLM Dependency',
+                  style: const TextStyle(
                     color: Colors.white,
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                SizedBox(height: 2),
+                const SizedBox(height: 2),
                 Text(
-                  'All habit analysis runs strictly on your phone’s neural processor without network transmission.',
-                  style: TextStyle(color: Colors.white70, fontSize: 12),
+                  isExternalApi
+                      ? 'AI inference via ${_settings.apiUrl.isNotEmpty ? _settings.apiUrl : "configured endpoint"}.'
+                      : 'All habit analysis runs strictly on your phone\'s neural processor without network transmission.',
+                  style: const TextStyle(color: Colors.white70, fontSize: 12),
                 ),
               ],
             ),
@@ -217,7 +308,7 @@ class _LocalAiSettingsScreenState extends ConsumerState<LocalAiSettingsScreen> {
                     ),
                     const SizedBox(width: 10),
                     Text(
-                      isEnabled ? 'AI Status: Running Locally' : 'AI Status: Disabled',
+                      isEnabled ? 'AI Status: Running' : 'AI Status: Disabled',
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 16,
@@ -235,10 +326,153 @@ class _LocalAiSettingsScreenState extends ConsumerState<LocalAiSettingsScreen> {
             const SizedBox(height: 8),
             Text(
               isEnabled
-                  ? 'Local Small Language Model (SLM) is active and processing prompts offline.'
+                  ? (_settings.useExternalApi
+                      ? 'Connected to external API: ${_settings.apiModel}'
+                      : 'Local Small Language Model (SLM) is active and processing prompts offline.')
                   : 'AI inference is stopped. ClearTime analytics, triggers, and deterministic summaries continue operating normally.',
               style: const TextStyle(color: AppTheme.neutralMuted, fontSize: 13),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildExternalApiCard() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.api_rounded, color: AppTheme.parentSecondary, size: 22),
+                    const SizedBox(width: 8),
+                    Text(
+                      'External LLM API',
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleMedium
+                          ?.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+                Switch.adaptive(
+                  value: _settings.useExternalApi,
+                  activeThumbColor: AppTheme.parentSecondary,
+                  onChanged: _toggleExternalApi,
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Connect to Ollama, OpenAI, Groq, or any OpenAI-compatible API endpoint.',
+              style: TextStyle(color: AppTheme.neutralMuted, fontSize: 12),
+            ),
+            if (_settings.useExternalApi) ...[
+              const SizedBox(height: 16),
+              TextField(
+                controller: _apiUrlController,
+                decoration: InputDecoration(
+                  labelText: 'API URL',
+                  hintText: 'http://192.168.1.100:11434/api/generate',
+                  helperText: 'Ollama: /api/generate  •  OpenAI: /v1/chat/completions',
+                  helperMaxLines: 2,
+                  prefixIcon: const Icon(Icons.link_rounded, size: 20),
+                  filled: true,
+                  fillColor: AppTheme.neutralBg,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+                keyboardType: TextInputType.url,
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _apiModelController,
+                decoration: InputDecoration(
+                  labelText: 'Model Name',
+                  hintText: 'llama3.2:1b, gemma2:2b, qwen2.5:1.5b',
+                  prefixIcon: const Icon(Icons.smart_toy_rounded, size: 20),
+                  filled: true,
+                  fillColor: AppTheme.neutralBg,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _apiKeyController,
+                decoration: InputDecoration(
+                  labelText: 'API Key (Optional)',
+                  hintText: 'sk-... (leave empty for Ollama)',
+                  prefixIcon: const Icon(Icons.key_rounded, size: 20),
+                  filled: true,
+                  fillColor: AppTheme.neutralBg,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+                obscureText: true,
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.parentSecondary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  icon: const Icon(Icons.save_rounded),
+                  label: const Text('Save & Connect',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  onPressed: _saveApiConfig,
+                ),
+              ),
+              if (_settings.isExternalApiConfigured) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppTheme.successGreen.withAlpha((0.1 * 255).round()),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: AppTheme.successGreen.withAlpha((0.3 * 255).round()),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.check_circle_rounded,
+                          color: AppTheme.successGreen, size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Connected: ${_settings.apiModel} @ ${_settings.apiUrl}',
+                          style: const TextStyle(
+                            color: AppTheme.successGreen,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
           ],
         ),
       ),
@@ -312,8 +546,8 @@ class _LocalAiSettingsScreenState extends ConsumerState<LocalAiSettingsScreen> {
                 ),
                 _buildMetricTile(
                   label: 'Network Needs',
-                  value: '0 Bytes (Offline)',
-                  icon: Icons.cloud_off_rounded,
+                  value: _settings.useExternalApi ? 'API Call' : '0 Bytes (Offline)',
+                  icon: _settings.useExternalApi ? Icons.cloud_rounded : Icons.cloud_off_rounded,
                 ),
               ],
             ),
@@ -438,7 +672,7 @@ class _LocalAiSettingsScreenState extends ConsumerState<LocalAiSettingsScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'On-Device Inference Benchmark',
+                  'Inference Test',
                   style: Theme.of(context)
                       .textTheme
                       .titleSmall
@@ -458,40 +692,61 @@ class _LocalAiSettingsScreenState extends ConsumerState<LocalAiSettingsScreen> {
               ],
             ),
             const SizedBox(height: 8),
-            const Text(
-              'Executes an offline sample inference prompt to measure local NPU latency and response validity.',
-              style: TextStyle(color: AppTheme.neutralMuted, fontSize: 12),
+            Text(
+              _settings.useExternalApi
+                  ? 'Tests the external API endpoint with a sample wellbeing prompt.'
+                  : 'Executes an offline sample inference prompt to measure local NPU latency and response validity.',
+              style: const TextStyle(color: AppTheme.neutralMuted, fontSize: 12),
             ),
             if (_testResult != null) ...[
               const SizedBox(height: 14),
               Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: AppTheme.neutralBg,
+                  color: _testResult!.isFallback
+                      ? AppTheme.warningOrange.withAlpha((0.1 * 255).round())
+                      : AppTheme.neutralBg,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppTheme.neutralBorder),
+                  border: Border.all(
+                    color: _testResult!.isFallback
+                        ? AppTheme.warningOrange.withAlpha((0.3 * 255).round())
+                        : AppTheme.neutralBorder,
+                  ),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
-                      children: const [
-                        Icon(Icons.check_circle_rounded,
-                            color: AppTheme.successGreen, size: 16),
-                        SizedBox(width: 6),
+                      children: [
+                        Icon(
+                          _testResult!.isFallback
+                              ? Icons.warning_amber_rounded
+                              : Icons.check_circle_rounded,
+                          color: _testResult!.isFallback
+                              ? AppTheme.warningOrange
+                              : AppTheme.successGreen,
+                          size: 16,
+                        ),
+                        const SizedBox(width: 6),
                         Text(
-                          'Test Passed • 100% On-Device',
+                          _testResult!.isFallback
+                              ? 'Test Failed — Check Configuration'
+                              : 'Test Passed ✓',
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 13,
-                            color: AppTheme.successGreen,
+                            color: _testResult!.isFallback
+                                ? AppTheme.warningOrange
+                                : AppTheme.successGreen,
                           ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      _testResult!.answer,
+                      _testResult!.answer.length > 300
+                          ? '${_testResult!.answer.substring(0, 300)}...'
+                          : _testResult!.answer,
                       style: const TextStyle(fontSize: 13),
                     ),
                     if (_testResult!.observations.isNotEmpty) ...[

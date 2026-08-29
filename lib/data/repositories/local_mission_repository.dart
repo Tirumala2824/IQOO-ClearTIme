@@ -25,9 +25,9 @@ class InMemoryLocalMissionRepository implements LocalMissionRepository {
         category: 'Learning',
         type: MissionType.focus,
         targetMinutes: 20,
-        currentMinutes: 20,
+        currentMinutes: 0,
         points: 50,
-        status: MissionStatus.completed,
+        status: MissionStatus.available,
       ),
       const ChildMission(
         id: 'm-study-sprint',
@@ -36,9 +36,9 @@ class InMemoryLocalMissionRepository implements LocalMissionRepository {
         category: 'Study',
         type: MissionType.focus,
         targetMinutes: 25,
-        currentMinutes: 15,
+        currentMinutes: 0,
         points: 60,
-        status: MissionStatus.inProgress,
+        status: MissionStatus.available,
       ),
       const ChildMission(
         id: 'm-break-10',
@@ -47,9 +47,9 @@ class InMemoryLocalMissionRepository implements LocalMissionRepository {
         category: 'Mindful Break',
         type: MissionType.breakMission,
         targetMinutes: 10,
-        currentMinutes: 10,
+        currentMinutes: 0,
         points: 40,
-        status: MissionStatus.completed,
+        status: MissionStatus.available,
       ),
       const ChildMission(
         id: 'm-screen-free-meal',
@@ -69,9 +69,9 @@ class InMemoryLocalMissionRepository implements LocalMissionRepository {
         category: 'Reading',
         type: MissionType.reading,
         targetMinutes: 15,
-        currentMinutes: 15,
+        currentMinutes: 0,
         points: 50,
-        status: MissionStatus.completed,
+        status: MissionStatus.available,
       ),
     ];
 

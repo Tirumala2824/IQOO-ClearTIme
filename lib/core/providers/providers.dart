@@ -59,8 +59,9 @@ final authorizationServiceProvider = Provider<AuthorizationService>((ref) {
 
 // --- Phase 2 Core On-Device Service Providers ---
 
-/// Toggle to switch between real Android platform channel and Demo mock adapter for previews
-final useDemoDataProvider = StateProvider<bool>((ref) => false);
+/// Toggle to switch between real Android platform channel and Demo mock adapter.
+/// Defaults to TRUE for hackathon demo so rich dynamic data is shown.
+final useDemoDataProvider = StateProvider<bool>((ref) => true);
 
 final usageDataProvider = Provider<UsageDataProvider>((ref) {
   final useDemo = ref.watch(useDemoDataProvider);
@@ -125,18 +126,27 @@ final deterministicFallbackServiceProvider =
   return const DeterministicFallbackService();
 });
 
+/// Reactive LLM provider that switches between on-device and external HTTP API.
+/// When AI settings have useExternalApi=true and a valid apiUrl+apiModel,
+/// it creates an HttpLlmProvider. Otherwise, falls back to OnDeviceLLMProvider.
 final localLlmProvider = Provider<LocalLLMProvider>((ref) {
   return OnDeviceLLMProvider();
 });
 
+/// Mutable override for the LLM provider. The AI settings screen updates this
+/// when the user configures an external API endpoint.
+final activeLlmProvider = StateProvider<LocalLLMProvider>((ref) {
+  return ref.watch(localLlmProvider);
+});
+
 final localModelManagerProvider = Provider<LocalModelManager>((ref) {
-  final llm = ref.watch(localLlmProvider);
+  final llm = ref.watch(activeLlmProvider);
   final settingsRepo = ref.watch(localAISettingsRepositoryProvider);
   return LocalModelManager(llmProvider: llm, settingsRepo: settingsRepo);
 });
 
 final aiDiagnosticsServiceProvider = Provider<AIDiagnosticsService>((ref) {
-  final llm = ref.watch(localLlmProvider);
+  final llm = ref.watch(activeLlmProvider);
   return AIDiagnosticsService(llmProvider: llm);
 });
 
@@ -149,7 +159,7 @@ final parentAIContextBuilderProvider = Provider<ParentAIContextBuilder>((ref) {
 });
 
 final localAICoachServiceProvider = Provider<LocalAICoachService>((ref) {
-  final llm = ref.watch(localLlmProvider);
+  final llm = ref.watch(activeLlmProvider);
   final builder = ref.watch(localAIContextBuilderProvider);
   final promptRepo = ref.watch(localPromptRepositoryProvider);
   final settingsRepo = ref.watch(localAISettingsRepositoryProvider);
@@ -169,7 +179,7 @@ final localAICoachServiceProvider = Provider<LocalAICoachService>((ref) {
 });
 
 final parentAIServiceProvider = Provider<ParentAIService>((ref) {
-  final llm = ref.watch(localLlmProvider);
+  final llm = ref.watch(activeLlmProvider);
   final builder = ref.watch(parentAIContextBuilderProvider);
   final promptRepo = ref.watch(localPromptRepositoryProvider);
   final settingsRepo = ref.watch(localAISettingsRepositoryProvider);

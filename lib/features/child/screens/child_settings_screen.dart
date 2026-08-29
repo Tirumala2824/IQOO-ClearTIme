@@ -104,6 +104,34 @@ class ChildSettingsScreen extends ConsumerWidget {
               padding: const EdgeInsets.all(16.0),
               child: Column(
                 children: [
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    secondary: const Icon(Icons.analytics_rounded,
+                        color: AppTheme.childPrimary, size: 28),
+                    title: const Text('Dynamic Demo Mode',
+                        style: TextStyle(fontWeight: FontWeight.bold)),
+                    subtitle: Text(
+                      ref.watch(useDemoDataProvider)
+                          ? 'Using realistic time-varying wellbeing simulator'
+                          : 'Using native Android UsageStatsManager hardware bridge',
+                    ),
+                    value: ref.watch(useDemoDataProvider),
+                    activeThumbColor: AppTheme.childSecondary,
+                    onChanged: (val) {
+                      ref.read(useDemoDataProvider.notifier).state = val;
+                      final userId = childState.profile?.userId ?? '';
+                      ref.read(childDashboardControllerProvider.notifier).loadDashboard(userId);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(val
+                              ? 'Switched to Dynamic Demo Simulator'
+                              : 'Switched to Live Android UsageStats'),
+                          backgroundColor: AppTheme.childSecondary,
+                        ),
+                      );
+                    },
+                  ),
+                  const Divider(),
                   ListTile(
                     contentPadding: EdgeInsets.zero,
                     leading: const Icon(Icons.privacy_tip_rounded,

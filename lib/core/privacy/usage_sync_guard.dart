@@ -12,7 +12,7 @@ class UsageSyncGuard {
   UsageSyncGuard._();
 
   /// NON-NEGOTIABLE CORE ARCHITECTURAL RULE
-  static const bool RAW_CHILD_USAGE_MUST_NEVER_BE_SENT_TO_SERVER = true;
+  static const bool rawChildUsageMustNeverBeSentToServer = true;
 
   static const String violationMessage =
       'CRITICAL ARCHITECTURAL VIOLATION: Raw child usage data, app packages, or private diary reflections cannot be synced to the backend!';

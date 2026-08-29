@@ -102,7 +102,7 @@ class _ParentTriggersScreenState extends ConsumerState<ParentTriggersScreen> {
 
                       // Trigger Type Dropdown
                       DropdownButtonFormField<TriggerType>(
-                        value: selectedType,
+                        initialValue: selectedType,
                         decoration: const InputDecoration(
                           labelText: 'Trigger Rule Type',
                           prefixIcon: Icon(Icons.tune_rounded),
@@ -156,7 +156,7 @@ class _ParentTriggersScreenState extends ConsumerState<ParentTriggersScreen> {
                       // Target Child Selector
                       if (children.isNotEmpty) ...[
                         DropdownButtonFormField<String>(
-                          value: selectedChildId.isNotEmpty
+                          initialValue: selectedChildId.isNotEmpty
                               ? selectedChildId
                               : children.first.id,
                           decoration: const InputDecoration(
@@ -203,7 +203,7 @@ class _ParentTriggersScreenState extends ConsumerState<ParentTriggersScreen> {
 
                       // Cooldown Duration
                       DropdownButtonFormField<Duration>(
-                        value: selectedCooldown,
+                        initialValue: selectedCooldown,
                         decoration: const InputDecoration(
                           labelText: 'Notification Cooldown',
                           prefixIcon: Icon(Icons.timer_outlined),

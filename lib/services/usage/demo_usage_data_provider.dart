@@ -36,27 +36,43 @@ class DemoUsageDataProvider implements UsageDataProvider {
       );
     }
 
+    // Dynamic data: scales with time of day so it looks real
+    final now = DateTime.now();
+    final hourFactor = now.hour / 24.0; // 0.0 at midnight, 1.0 at 11pm
+    final minuteJitter = (now.minute % 7) * 3; // 0-18 minute jitter
+
+    final totalMin = (50 + (hourFactor * 180) + minuteJitter).round().clamp(30, 280);
+    final focusMin = (totalMin * 0.55 + minuteJitter * 0.5).round().clamp(10, totalMin);
+    final breaks = (hourFactor * 6 + (now.minute % 3)).round().clamp(0, 8);
+    final unlocks = (hourFactor * 20 + (now.minute % 5)).round().clamp(2, 30);
+    final changePercent = -14.2 + (now.minute % 10) * 1.5;
+
+    final eduMin = (focusMin * 0.6).round();
+    final creativityMin = (totalMin * 0.2).round();
+    final gamesMin = (totalMin * 0.25).round();
+    final utilMin = totalMin - eduMin - creativityMin - gamesMin;
+
     final categories = [
-      const CategoryUsage(category: 'Education & Learning', totalMinutes: 65, percentage: 38.2, appCount: 2),
-      const CategoryUsage(category: 'Creativity & Art', totalMinutes: 40, percentage: 23.5, appCount: 1),
-      const CategoryUsage(category: 'Games & Play', totalMinutes: 45, percentage: 26.5, appCount: 2),
-      const CategoryUsage(category: 'Utilities', totalMinutes: 20, percentage: 11.8, appCount: 3),
+      CategoryUsage(category: 'Education & Learning', totalMinutes: eduMin, percentage: (eduMin / totalMin * 100), appCount: 2),
+      CategoryUsage(category: 'Creativity & Art', totalMinutes: creativityMin, percentage: (creativityMin / totalMin * 100), appCount: 1),
+      CategoryUsage(category: 'Games & Play', totalMinutes: gamesMin, percentage: (gamesMin / totalMin * 100), appCount: 2),
+      CategoryUsage(category: 'Utilities', totalMinutes: utilMin, percentage: (utilMin / totalMin * 100), appCount: 3),
     ];
 
     final topApps = [
-      const AppUsageSummary(packageName: 'com.duolingo', appName: 'Duolingo', category: 'Education & Learning', durationMinutes: 35, launchCount: 3),
-      const AppUsageSummary(packageName: 'com.khanacademy', appName: 'Khan Academy Kids', category: 'Education & Learning', durationMinutes: 30, launchCount: 2),
-      const AppUsageSummary(packageName: 'com.procreate.pocket', appName: 'Sketch & Draw', category: 'Creativity & Art', durationMinutes: 40, launchCount: 1),
-      const AppUsageSummary(packageName: 'com.mojang.minecraftpe', appName: 'Minecraft Creative', category: 'Games & Play', durationMinutes: 30, launchCount: 1),
-      const AppUsageSummary(packageName: 'com.chess.kid', appName: 'Chess Adventure', category: 'Games & Play', durationMinutes: 15, launchCount: 1),
+      AppUsageSummary(packageName: 'com.duolingo', appName: 'Duolingo', category: 'Education & Learning', durationMinutes: (eduMin * 0.55).round(), launchCount: 3),
+      AppUsageSummary(packageName: 'com.khanacademy', appName: 'Khan Academy Kids', category: 'Education & Learning', durationMinutes: (eduMin * 0.45).round(), launchCount: 2),
+      AppUsageSummary(packageName: 'com.procreate.pocket', appName: 'Sketch & Draw', category: 'Creativity & Art', durationMinutes: creativityMin, launchCount: 1),
+      AppUsageSummary(packageName: 'com.mojang.minecraftpe', appName: 'Minecraft Creative', category: 'Games & Play', durationMinutes: (gamesMin * 0.65).round(), launchCount: 1),
+      AppUsageSummary(packageName: 'com.chess.kid', appName: 'Chess Adventure', category: 'Games & Play', durationMinutes: (gamesMin * 0.35).round(), launchCount: 1),
     ];
 
     return UsageSummary(
-      totalMinutes: 170, // 2h 50m
-      focusMinutes: 105, // 1h 45m
-      breakCount: 5,
-      screenUnlockCount: 18,
-      changePercentageFromYesterday: -14.2,
+      totalMinutes: totalMin,
+      focusMinutes: focusMin,
+      breakCount: breaks,
+      screenUnlockCount: unlocks,
+      changePercentageFromYesterday: changePercent,
       categories: categories,
       topApps: topApps,
     );

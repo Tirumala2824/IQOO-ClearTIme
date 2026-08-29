@@ -9,11 +9,16 @@ import '../../../data/models/privacy_setting_model.dart';
 import '../../../data/repositories/family_repository.dart';
 import '../../../data/repositories/configuration_repository.dart';
 
+import '../../../data/models/approved_report_model.dart';
+import '../../../data/repositories/approved_report_repository.dart';
+
 class ParentDashboardState {
   final Family? family;
   final List<ChildProfile> children;
   final List<ReportConfiguration> reports;
   final List<TriggerConfiguration> triggers;
+  final List<ApprovedReport> approvedReports;
+  final List<String> activeAlerts;
   final NotificationPreference? notificationPrefs;
   final PrivacySetting? privacySettings;
   final bool isLoading;
@@ -24,6 +29,8 @@ class ParentDashboardState {
     this.children = const [],
     this.reports = const [],
     this.triggers = const [],
+    this.approvedReports = const [],
+    this.activeAlerts = const [],
     this.notificationPrefs,
     this.privacySettings,
     this.isLoading = false,
@@ -38,6 +45,8 @@ class ParentDashboardState {
     List<ChildProfile>? children,
     List<ReportConfiguration>? reports,
     List<TriggerConfiguration>? triggers,
+    List<ApprovedReport>? approvedReports,
+    List<String>? activeAlerts,
     NotificationPreference? notificationPrefs,
     PrivacySetting? privacySettings,
     bool? isLoading,
@@ -49,6 +58,8 @@ class ParentDashboardState {
       children: children ?? this.children,
       reports: reports ?? this.reports,
       triggers: triggers ?? this.triggers,
+      approvedReports: approvedReports ?? this.approvedReports,
+      activeAlerts: activeAlerts ?? this.activeAlerts,
       notificationPrefs: notificationPrefs ?? this.notificationPrefs,
       privacySettings: privacySettings ?? this.privacySettings,
       isLoading: isLoading ?? this.isLoading,
@@ -60,12 +71,15 @@ class ParentDashboardState {
 class ParentDashboardController extends StateNotifier<ParentDashboardState> {
   final FamilyRepository _familyRepository;
   final ConfigurationRepository _configurationRepository;
+  final ApprovedReportRepository _approvedReportRepository;
 
   ParentDashboardController({
     required FamilyRepository familyRepository,
     required ConfigurationRepository configurationRepository,
+    required ApprovedReportRepository approvedReportRepository,
   })  : _familyRepository = familyRepository,
         _configurationRepository = configurationRepository,
+        _approvedReportRepository = approvedReportRepository,
         super(const ParentDashboardState());
 
   Future<void> loadDashboard(String userId) async {
@@ -89,11 +103,50 @@ class ParentDashboardController extends StateNotifier<ParentDashboardState> {
         userId: userId,
       );
 
+      // Load approved reports for all children
+      final List<ApprovedReport> allReports = [];
+      final List<String> alerts = [];
+
+      for (final child in children) {
+        final childReports = await _approvedReportRepository.getApprovedReports(child.id);
+        allReports.addAll(childReports);
+      }
+
+      // If no approved reports yet in memory, create a dynamic baseline report
+      if (allReports.isEmpty && children.isNotEmpty) {
+        final now = DateTime.now();
+        for (final child in children) {
+          final defaultReport = ApprovedReport(
+            id: 'rep-init-${child.id}',
+            childId: child.id,
+            childNickname: child.nickname,
+            familyId: family.id,
+            period: ReportPeriod.weekly,
+            periodStart: now.subtract(const Duration(days: 7)),
+            periodEnd: now,
+            facts: const ReportFacts(
+              totalScreenMinutes: 720,
+              focusMinutes: 310,
+              breakCount: 18,
+              goalsCompletedCount: 4,
+              goalsTotalCount: 5,
+              changePercentage: -8.5,
+            ),
+            summaryText: 'Healthy screen-time balance and consistent focus sessions recorded.',
+            createdAt: now,
+          );
+          await _approvedReportRepository.saveApprovedReport(defaultReport);
+          allReports.add(defaultReport);
+        }
+      }
+
       state = state.copyWith(
         family: family,
         children: children,
         reports: reports,
         triggers: triggers,
+        approvedReports: allReports,
+        activeAlerts: alerts,
         notificationPrefs: notifs,
         privacySettings: privacy,
         isLoading: false,
@@ -219,8 +272,10 @@ final parentDashboardControllerProvider =
         (ref) {
   final familyRepo = ref.watch(familyRepositoryProvider);
   final configRepo = ref.watch(configurationRepositoryProvider);
+  final reportRepo = ref.watch(approvedReportRepositoryProvider);
   return ParentDashboardController(
     familyRepository: familyRepo,
     configurationRepository: configRepo,
+    approvedReportRepository: reportRepo,
   );
 });

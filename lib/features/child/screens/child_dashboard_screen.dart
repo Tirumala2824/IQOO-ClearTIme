@@ -7,11 +7,43 @@ import '../../../data/models/reflection_model.dart';
 import '../controllers/child_dashboard_controller.dart';
 import 'child_reflection_dialog.dart';
 
-class ChildDashboardScreen extends ConsumerWidget {
+class ChildDashboardScreen extends ConsumerStatefulWidget {
   const ChildDashboardScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ChildDashboardScreen> createState() => _ChildDashboardScreenState();
+}
+
+class _ChildDashboardScreenState extends ConsumerState<ChildDashboardScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Auto-load dashboard data on first mount
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final childState = ref.read(childDashboardControllerProvider);
+      final userId = childState.profile?.userId ?? '';
+      ref.read(childDashboardControllerProvider.notifier).loadDashboard(userId);
+    });
+  }
+
+  String _getHeroLevel(int totalXp) {
+    if (totalXp >= 500) return 'Mindful Hero Level 5 🌟';
+    if (totalXp >= 300) return 'Mindful Hero Level 4 ⭐';
+    if (totalXp >= 150) return 'Mindful Hero Level 3 💫';
+    if (totalXp >= 50) return 'Mindful Hero Level 2 ✨';
+    return 'Mindful Hero Level 1 🌱';
+  }
+
+  String _getFocusSubtitle(int focusMinutes) {
+    if (focusMinutes >= 120) return 'Amazing focus today!';
+    if (focusMinutes >= 60) return 'Great learning!';
+    if (focusMinutes >= 30) return 'Good progress!';
+    if (focusMinutes > 0) return 'Keep going!';
+    return 'Start focusing!';
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final childState = ref.watch(childDashboardControllerProvider);
     final profile = childState.profile;
     final family = childState.family;
@@ -129,9 +161,9 @@ class ChildDashboardScreen extends ConsumerWidget {
                     ],
                   ),
                   const SizedBox(height: 18),
-                  const Text(
-                    'Mindful Hero Level 1',
-                    style: TextStyle(
+                  Text(
+                    _getHeroLevel(childState.totalPoints),
+                    style: const TextStyle(
                       color: Colors.white,
                       fontSize: 22,
                       fontWeight: FontWeight.w800,
@@ -183,7 +215,7 @@ class ChildDashboardScreen extends ConsumerWidget {
                     icon: Icons.bolt_rounded,
                     title: 'Focus Time',
                     value: usage.formattedFocusTime,
-                    subtitle: 'Great learning!',
+                    subtitle: _getFocusSubtitle(usage.focusMinutes),
                     color: AppTheme.childSecondary,
                   ),
                 ),

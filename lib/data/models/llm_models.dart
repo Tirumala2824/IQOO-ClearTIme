@@ -366,6 +366,12 @@ class AISettings {
   final bool enableDiagnostics;
   final int inferenceTimeoutMs;
 
+  /// External LLM API configuration
+  final bool useExternalApi;
+  final String apiUrl;
+  final String apiModel;
+  final String apiKey;
+
   const AISettings({
     this.isAiEnabled = true,
     this.activeModelId = 'slm-nano-380m',
@@ -373,7 +379,15 @@ class AISettings {
     this.maxTokens = 512,
     this.enableDiagnostics = true,
     this.inferenceTimeoutMs = 15000,
+    this.useExternalApi = false,
+    this.apiUrl = '',
+    this.apiModel = '',
+    this.apiKey = '',
   });
+
+  /// Whether the external API is properly configured and ready to use.
+  bool get isExternalApiConfigured =>
+      useExternalApi && apiUrl.isNotEmpty && apiModel.isNotEmpty;
 
   AISettings copyWith({
     bool? isAiEnabled,
@@ -382,6 +396,10 @@ class AISettings {
     int? maxTokens,
     bool? enableDiagnostics,
     int? inferenceTimeoutMs,
+    bool? useExternalApi,
+    String? apiUrl,
+    String? apiModel,
+    String? apiKey,
   }) {
     return AISettings(
       isAiEnabled: isAiEnabled ?? this.isAiEnabled,
@@ -390,6 +408,10 @@ class AISettings {
       maxTokens: maxTokens ?? this.maxTokens,
       enableDiagnostics: enableDiagnostics ?? this.enableDiagnostics,
       inferenceTimeoutMs: inferenceTimeoutMs ?? this.inferenceTimeoutMs,
+      useExternalApi: useExternalApi ?? this.useExternalApi,
+      apiUrl: apiUrl ?? this.apiUrl,
+      apiModel: apiModel ?? this.apiModel,
+      apiKey: apiKey ?? this.apiKey,
     );
   }
 
@@ -400,6 +422,10 @@ class AISettings {
         'maxTokens': maxTokens,
         'enableDiagnostics': enableDiagnostics,
         'inferenceTimeoutMs': inferenceTimeoutMs,
+        'useExternalApi': useExternalApi,
+        'apiUrl': apiUrl,
+        'apiModel': apiModel,
+        'apiKey': apiKey,
       };
 
   factory AISettings.fromJson(Map<String, dynamic> json) => AISettings(
@@ -410,6 +436,10 @@ class AISettings {
         enableDiagnostics: json['enableDiagnostics'] as bool? ?? true,
         inferenceTimeoutMs:
             (json['inferenceTimeoutMs'] as num? ?? 15000).toInt(),
+        useExternalApi: json['useExternalApi'] as bool? ?? false,
+        apiUrl: json['apiUrl'] as String? ?? '',
+        apiModel: json['apiModel'] as String? ?? '',
+        apiKey: json['apiKey'] as String? ?? '',
       );
 }
 

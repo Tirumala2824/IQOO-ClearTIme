@@ -12,20 +12,9 @@ class InMemoryLocalReflectionRepository implements LocalReflectionRepository {
   final Map<String, DailyReflection> _reflections = {};
 
   InMemoryLocalReflectionRepository() {
-    _initDefaultReflections();
+    // Start empty — reflections are created by the child
   }
 
-  void _initDefaultReflections() {
-    final now = DateTime.now();
-    final sample = DailyReflection(
-      id: 'ref-today',
-      date: DateTime(now.year, now.month, now.day),
-      mood: ReflectionMood.productive,
-      notes: 'I solved 5 math quests and took great outdoor breaks!',
-      createdAt: now.subtract(const Duration(hours: 2)),
-    );
-    _reflections[sample.id] = sample;
-  }
 
   @override
   Future<List<DailyReflection>> getReflections() async {

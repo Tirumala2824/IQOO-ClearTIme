@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_routes.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../core/providers/providers.dart';
 import '../../../data/models/approved_report_model.dart';
 import '../../../data/models/child_profile_model.dart';
 import '../../authentication/controllers/auth_controller.dart';
@@ -21,11 +20,21 @@ class _ParentDashboardScreenState extends ConsumerState<ParentDashboardScreen> {
   String? _selectedChildId;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final user = ref.read(authControllerProvider).user;
+      if (user != null) {
+        ref.read(parentDashboardControllerProvider.notifier).loadDashboard(user.id);
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final parentState = ref.watch(parentDashboardControllerProvider);
     final user = ref.watch(authControllerProvider).user;
     final family = parentState.family;
-    final reportRepo = ref.watch(approvedReportRepositoryProvider);
 
     if (parentState.isLoading && family == null) {
       return const Scaffold(
@@ -231,10 +240,12 @@ class _ParentDashboardScreenState extends ConsumerState<ParentDashboardScreen> {
               ],
 
               // Approved Insights Section for Selected Child
-              FutureBuilder<List<ApprovedReport>>(
-                future: reportRepo.getApprovedReports(activeChild.id),
-                builder: (context, snapshot) {
-                  final reports = snapshot.data ?? [];
+              Builder(
+                builder: (context) {
+                  final reports = parentState.approvedReports
+                      .where((r) => r.childId == activeChild.id)
+                      .toList();
+
                   final latestWeekly = reports.firstWhere(
                     (r) => r.period == ReportPeriod.weekly,
                     orElse: () => reports.isNotEmpty
@@ -248,12 +259,12 @@ class _ParentDashboardScreenState extends ConsumerState<ParentDashboardScreen> {
                             periodStart: DateTime.now().subtract(const Duration(days: 7)),
                             periodEnd: DateTime.now(),
                             facts: const ReportFacts(
-                              totalScreenMinutes: 872,
-                              focusMinutes: 370,
-                              breakCount: 22,
-                              goalsCompletedCount: 5,
-                              goalsTotalCount: 7,
-                              changePercentage: 12.1,
+                              totalScreenMinutes: 720,
+                              focusMinutes: 310,
+                              breakCount: 18,
+                              goalsCompletedCount: 4,
+                              goalsTotalCount: 5,
+                              changePercentage: -8.5,
                             ),
                             summaryText: 'Balanced mindful progress recorded this week.',
                             createdAt: DateTime.now(),
@@ -273,139 +284,147 @@ class _ParentDashboardScreenState extends ConsumerState<ParentDashboardScreen> {
                             style: Theme.of(context)
                                 .textTheme
                                 .titleMedium
-                                ?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                ),
+                                ?.copyWith(fontWeight: FontWeight.bold),
                           ),
-                          TextButton(
-                            onPressed: () => context.go(AppRoutes.parentReports),
-                            child: const Text('View All Reports'),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-
-                      // Metric Grid
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildInsightCard(
-                              title: 'Screen Time Trend',
-                              value: facts.formattedTotalTime,
-                              subtitle:
-                                  '${facts.changePercentage >= 0 ? "+" : ""}${facts.changePercentage}% vs prior',
-                              icon: Icons.trending_up_rounded,
-                              color: facts.changePercentage > 15
-                                  ? AppTheme.warningOrange
-                                  : AppTheme.parentPrimary,
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: _buildInsightCard(
-                              title: 'Focus & Learning',
-                              value: facts.formattedFocusTime,
-                              subtitle: '${facts.focusChangePercentage >= 0 ? "+" : ""}${facts.focusChangePercentage}% focus hours',
-                              icon: Icons.psychology_rounded,
-                              color: AppTheme.parentSecondary,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildInsightCard(
-                              title: 'Movement Breaks',
-                              value: '${facts.breakCount} pauses',
-                              subtitle: 'Eye & physical pauses',
-                              icon: Icons.directions_walk_rounded,
-                              color: AppTheme.successGreen,
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: _buildInsightCard(
-                              title: 'Goals Progress',
-                              value:
-                                  '${facts.goalsCompletedCount}/${facts.goalsTotalCount}',
-                              subtitle: 'Mindful goals met',
-                              icon: Icons.emoji_events_rounded,
-                              color: AppTheme.parentAccent,
-                            ),
-                          ),
-                        ],
-                      ),
-
-                      const SizedBox(height: 20),
-
-                      // Recent Reports Section
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
                           Text(
-                            'Recent Reports',
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleMedium
-                                ?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                ),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.psychology_rounded,
-                                color: AppTheme.parentPrimary),
-                            tooltip: 'Ask Local AI',
-                            onPressed: () => context.go(AppRoutes.parentAi),
+                            latestWeekly.period == ReportPeriod.weekly
+                                ? 'Weekly Average'
+                                : 'Daily Report',
+                            style: const TextStyle(
+                              color: AppTheme.neutralMuted,
+                              fontSize: 12,
+                            ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 12),
 
-                      if (reports.isEmpty)
-                        Card(
-                          child: Padding(
-                            padding: const EdgeInsets.all(20),
-                            child: Column(
-                              children: [
-                                const Icon(Icons.assessment_outlined,
-                                    size: 36, color: AppTheme.neutralMuted),
-                                const SizedBox(height: 10),
-                                const Text(
-                                  'No snapshots generated yet',
-                                  style: TextStyle(fontWeight: FontWeight.bold),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  'When ${activeChild.nickname}\'s device completes a daily or weekly period, privacy-filtered snapshots appear here.',
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(
-                                      fontSize: 12, color: AppTheme.neutralMuted),
-                                ),
-                              ],
-                            ),
+                      // Metrics Summary Grid (2x2)
+                      GridView.count(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        crossAxisCount: 2,
+                        crossAxisSpacing: 12,
+                        mainAxisSpacing: 12,
+                        childAspectRatio: 1.6,
+                        children: [
+                          _buildStatCard(
+                            title: 'Screen Time',
+                            value: facts.formattedTotalTime,
+                            subtitle:
+                                '${facts.changePercentage >= 0 ? "+" : ""}${facts.changePercentage.toStringAsFixed(1)}% vs prior',
+                            icon: Icons.timer_outlined,
+                            color: AppTheme.parentPrimary,
                           ),
-                        )
-                      else
-                        ...reports.take(2).map((r) {
+                          _buildStatCard(
+                            title: 'Focus Sessions',
+                            value: facts.formattedFocusTime,
+                            subtitle:
+                                '${((facts.focusMinutes / (facts.totalScreenMinutes > 0 ? facts.totalScreenMinutes : 1)) * 100).round()}% of total time',
+                            icon: Icons.psychology_outlined,
+                            color: AppTheme.parentSecondary,
+                          ),
+                          _buildStatCard(
+                            title: 'Mindful Breaks',
+                            value: '${facts.breakCount}',
+                            subtitle: 'Approved count',
+                            icon: Icons.self_improvement_outlined,
+                            color: AppTheme.successGreen,
+                          ),
+                          _buildStatCard(
+                            title: 'Goal Progress',
+                            value:
+                                '${facts.goalsCompletedCount}/${facts.goalsTotalCount}',
+                            subtitle: 'Wellbeing goals',
+                            icon: Icons.flag_outlined,
+                            color: AppTheme.warningOrange,
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // Weekly Summary Card
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(Icons.verified_outlined,
+                                      color: AppTheme.parentPrimary, size: 20),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Approved Report Summary',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: AppTheme.parentPrimary,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                latestWeekly.summaryText,
+                                style: const TextStyle(
+                                    fontSize: 13, height: 1.4),
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    'Generated ${latestWeekly.periodStart.month}/${latestWeekly.periodStart.day} - ${latestWeekly.periodEnd.month}/${latestWeekly.periodEnd.day}',
+                                    style: const TextStyle(
+                                        color: AppTheme.neutralMuted,
+                                        fontSize: 11),
+                                  ),
+                                  TextButton.icon(
+                                    onPressed: () => context.push(
+                                        '${AppRoutes.parentAi}?childId=${activeChild.id}&reportId=${latestWeekly.id}'),
+                                    icon: const Icon(Icons.chat_bubble_outline_rounded, size: 16),
+                                    label: const Text('Discuss with AI',
+                                        style: TextStyle(fontSize: 12)),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                      if (reports.length > 1) ...[
+                        const SizedBox(height: 16),
+                        Text(
+                          'Recent Approved Reports',
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleSmall
+                              ?.copyWith(fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 8),
+                        ...reports.take(3).map((r) {
                           return Card(
-                            margin: const EdgeInsets.only(bottom: 10),
+                            margin: const EdgeInsets.only(bottom: 8),
                             child: ListTile(
                               leading: Container(
                                 padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(
                                   color: AppTheme.parentPrimary
-                                      .withAlpha((0.15 * 255).round()),
-                                  borderRadius: BorderRadius.circular(10),
+                                      .withAlpha((0.1 * 255).round()),
+                                  borderRadius: BorderRadius.circular(8),
                                 ),
-                                child: const Icon(Icons.assessment_rounded,
-                                    color: AppTheme.parentPrimary),
+                                child: const Icon(Icons.description_outlined,
+                                    color: AppTheme.parentPrimary, size: 20),
                               ),
                               title: Text(
-                                r.formattedPeriodTitle,
+                                '${r.period == ReportPeriod.daily ? "Daily" : "Weekly"} Report • ${r.periodStart.month}/${r.periodStart.day}',
                                 style: const TextStyle(
-                                    fontWeight: FontWeight.bold, fontSize: 14),
+                                    fontWeight: FontWeight.bold, fontSize: 13),
                               ),
                               subtitle: Text(
                                 'Screen: ${r.facts.formattedTotalTime} • Focus: ${r.facts.formattedFocusTime}',
@@ -425,6 +444,7 @@ class _ParentDashboardScreenState extends ConsumerState<ParentDashboardScreen> {
                             ),
                           );
                         }),
+                      ],
                     ],
                   );
                 },
@@ -509,7 +529,7 @@ class _ParentDashboardScreenState extends ConsumerState<ParentDashboardScreen> {
     );
   }
 
-  Widget _buildInsightCard({
+  Widget _buildStatCard({
     required String title,
     required String value,
     required String subtitle,
