@@ -224,7 +224,40 @@ class _JoinFamilyScreenState extends ConsumerState<JoinFamilyScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: ActionChip(
+                    avatar: const Icon(Icons.flash_on_rounded,
+                        size: 16, color: AppTheme.childPrimary),
+                    label: const Text(
+                      'Fill Test Code (TEST2026)',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.childPrimary,
+                      ),
+                    ),
+                    backgroundColor:
+                        AppTheme.childPrimary.withAlpha((0.08 * 255).round()),
+                    side: BorderSide(
+                      color:
+                          AppTheme.childPrimary.withAlpha((0.2 * 255).round()),
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        _codeController.text = 'TEST2026';
+                        if (_nicknameController.text.trim().isEmpty) {
+                          _nicknameController.text = 'Leo';
+                        }
+                        if (_ageController.text.trim().isEmpty) {
+                          _ageController.text = '11';
+                        }
+                      });
+                    },
+                  ),
+                ),
+                const SizedBox(height: 12),
 
                 TextFormField(
                   controller: _nicknameController,

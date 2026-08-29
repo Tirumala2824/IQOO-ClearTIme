@@ -28,6 +28,10 @@ import 'package:cleartime/features/parent/screens/prompt_manager_screen.dart';
 import 'package:cleartime/features/parent/screens/prompt_editor_screen.dart';
 import 'package:cleartime/features/parent/screens/ai_diagnostics_screen.dart';
 import 'package:cleartime/features/parent/screens/parent_ai_screen.dart';
+import 'package:cleartime/features/parent/controllers/parent_dashboard_controller.dart';
+import 'package:cleartime/features/family/controllers/invitation_controller.dart';
+import 'package:cleartime/features/family/screens/invite_child_screen.dart';
+import 'package:cleartime/features/family/screens/join_family_screen.dart';
 import 'package:cleartime/services/usage/demo_usage_data_provider.dart';
 
 class FakeAuthRepository implements AuthRepository {
@@ -514,6 +518,82 @@ void main() {
       expect(find.text('Parent AI Assistant'), findsOneWidget);
       expect(find.textContaining('100% On-Device AI'), findsOneWidget);
       expect(find.text('Summarize today\'s balance'), findsOneWidget);
+    });
+
+    testWidgets('InviteChildScreen renders pairing instructions and code generation',
+        (WidgetTester tester) async {
+      final fakeParent = UserProfile(
+        id: 'parent-123',
+        role: UserRole.parent,
+        email: 'parent@example.com',
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+
+      final container = ProviderContainer(
+        overrides: [
+          authRepositoryProvider
+              .overrideWithValue(FakeAuthRepository(fakeParent)),
+          familyRepositoryProvider.overrideWithValue(FakeFamilyRepository()),
+          configurationRepositoryProvider
+              .overrideWithValue(FakeConfigurationRepository()),
+        ],
+      );
+      await container
+          .read(parentDashboardControllerProvider.notifier)
+          .loadDashboard('parent-123');
+      await container
+          .read(invitationControllerProvider.notifier)
+          .loadActiveInvitations('fam-1');
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(
+            home: InviteChildScreen(),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump();
+
+      expect(find.text('Invite Child to Family'), findsOneWidget);
+      expect(find.text('Pair Child Device Securely'), findsOneWidget);
+      expect(find.byType(ElevatedButton), findsOneWidget);
+    });
+
+    testWidgets('JoinFamilyScreen renders invitation code input, avatar selector, and quick-fill test button',
+        (WidgetTester tester) async {
+      final fakeChild = UserProfile(
+        id: 'child-123',
+        role: UserRole.child,
+        displayName: 'Leo',
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            authRepositoryProvider
+                .overrideWithValue(FakeAuthRepository(fakeChild)),
+            familyRepositoryProvider.overrideWithValue(FakeFamilyRepository()),
+          ],
+          child: const MaterialApp(
+            home: JoinFamilyScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Join Family Space'), findsOneWidget);
+      expect(find.text('Welcome to ClearTime!'), findsOneWidget);
+      expect(find.text('Invitation Code'), findsOneWidget);
+      expect(find.text('Fill Test Code (TEST2026)'), findsOneWidget);
+      expect(find.text('Your Nickname'), findsOneWidget);
+      expect(find.text('Choose an Avatar'), findsOneWidget);
+      expect(find.text('Join Family Hub'), findsOneWidget);
     });
   });
 }

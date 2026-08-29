@@ -15,8 +15,8 @@ class LocalLlmHandler(private val context: Context) : MethodChannel.MethodCallHa
     private var isLoaded = true
     private var activeModelId = "slm-nano-380m"
 
-    private val installedModels = mutableMapOf(
-        "slm-nano-380m" to mapOf(
+    private val installedModels: MutableMap<String, Map<String, Any>> = mutableMapOf(
+        "slm-nano-380m" to mapOf<String, Any>(
             "id" to "slm-nano-380m",
             "name" to "ClearTime-SLM-Nano",
             "version" to "1.2.0",
@@ -29,7 +29,7 @@ class LocalLlmHandler(private val context: Context) : MethodChannel.MethodCallHa
             "isActive" to true,
             "description" to "Ultra-compact edge model fine-tuned for instant local habit summaries and daily quest coaching."
         ),
-        "slm-balanced-1b" to mapOf(
+        "slm-balanced-1b" to mapOf<String, Any>(
             "id" to "slm-balanced-1b",
             "name" to "ClearTime-SLM-Balanced",
             "version" to "1.4.0",
@@ -44,8 +44,8 @@ class LocalLlmHandler(private val context: Context) : MethodChannel.MethodCallHa
         )
     )
 
-    private val availableModels = mutableMapOf(
-        "slm-pro-3b" to mapOf(
+    private val availableModels: MutableMap<String, Map<String, Any>> = mutableMapOf(
+        "slm-pro-3b" to mapOf<String, Any>(
             "id" to "slm-pro-3b",
             "name" to "ClearTime-SLM-Pro",
             "version" to "2.0.0",
@@ -79,16 +79,16 @@ class LocalLlmHandler(private val context: Context) : MethodChannel.MethodCallHa
                 "getModelInfo" -> {
                     val current = installedModels[activeModelId] ?: installedModels["slm-nano-380m"]!!
                     result.success(
-                        mapOf(
-                            "modelName" to current["name"],
-                            "version" to current["version"],
-                            "contextLimit" to current["contextTokens"],
-                            "quantization" to current["quantization"],
-                            "sizeMb" to current["sizeMb"],
+                        mapOf<String, Any>(
+                            "modelName" to (current["name"] ?: ""),
+                            "version" to (current["version"] ?: ""),
+                            "contextLimit" to (current["contextTokens"] ?: 2048),
+                            "quantization" to (current["quantization"] ?: ""),
+                            "sizeMb" to (current["sizeMb"] ?: 380),
                             "isLoaded" to isLoaded,
                             "runtimeType" to "On-Device Neural Engine",
-                            "memoryUsageMb" to ((current["sizeMb"] as Int) * 0.75).toInt(),
-                            "isInstalled" to (current["isInstalled"] as Boolean)
+                            "memoryUsageMb" to (((current["sizeMb"] as? Int) ?: 380) * 0.75).toInt(),
+                            "isInstalled" to ((current["isInstalled"] as? Boolean) ?: true)
                         )
                     )
                 }
@@ -110,7 +110,7 @@ class LocalLlmHandler(private val context: Context) : MethodChannel.MethodCallHa
                     val modelId = call.argument<String>("modelId") ?: ""
                     val model = availableModels[modelId]
                     if (model != null) {
-                        val installedEntry = model.toMutableMap()
+                        val installedEntry = HashMap<String, Any>(model)
                         installedEntry["isInstalled"] = true
                         installedModels[modelId] = installedEntry
                         availableModels.remove(modelId)
@@ -123,7 +123,7 @@ class LocalLlmHandler(private val context: Context) : MethodChannel.MethodCallHa
                     val modelId = call.argument<String>("modelId") ?: ""
                     val model = installedModels[modelId]
                     if (model != null) {
-                        val availEntry = model.toMutableMap()
+                        val availEntry = HashMap<String, Any>(model)
                         availEntry["isInstalled"] = false
                         availEntry["isActive"] = false
                         availableModels[modelId] = availEntry

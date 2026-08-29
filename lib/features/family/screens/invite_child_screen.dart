@@ -18,7 +18,7 @@ class _InviteChildScreenState extends ConsumerState<InviteChildScreen> {
   @override
   void initState() {
     super.initState();
-    _loadInvitations();
+    Future.microtask(() => _loadInvitations());
   }
 
   void _loadInvitations() {
