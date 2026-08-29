@@ -124,6 +124,23 @@ class SecureLocalUsageStore implements LocalUsageStore {
   }
 
   @override
+  Future<List<DailyAggregate>> getDailyAggregatesInRange(
+      String start, String end) async {
+    final list = <DailyAggregate>[];
+    for (final entry in _encryptedAggregates.entries) {
+      if (entry.key.compareTo(start) >= 0 && entry.key.compareTo(end) <= 0) {
+        try {
+          final plain = _decrypt(entry.value);
+          final json = jsonDecode(plain) as Map<String, dynamic>;
+          list.add(DailyAggregate.fromJson(json));
+        } catch (_) {}
+      }
+    }
+    list.sort((a, b) => a.dateString.compareTo(b.dateString));
+    return list;
+  }
+
+  @override
   Future<void> deleteUsage(String id) async {
     _encryptedUsageRecords.remove(id);
   }

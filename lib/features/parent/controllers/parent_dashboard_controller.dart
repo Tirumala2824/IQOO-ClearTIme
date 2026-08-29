@@ -173,9 +173,9 @@ class ParentDashboardController extends StateNotifier<ParentDashboardState> {
 
   Future<void> toggleTrigger(TriggerConfiguration config, bool active) async {
     try {
-      final updated = config.copyWith(isActive: active);
+      final updated = config.copyWith(enabled: active);
       await _configurationRepository.updateTriggerConfiguration(updated);
-      final list =
+      final List<TriggerConfiguration> list =
           state.triggers.map((t) => t.id == config.id ? updated : t).toList();
       state = state.copyWith(triggers: list);
     } catch (e) {

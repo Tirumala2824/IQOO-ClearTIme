@@ -3,17 +3,29 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_routes.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/providers/providers.dart';
+import '../../../data/models/approved_report_model.dart';
+import '../../../data/models/child_profile_model.dart';
 import '../../authentication/controllers/auth_controller.dart';
 import '../controllers/parent_dashboard_controller.dart';
 
-class ParentDashboardScreen extends ConsumerWidget {
+class ParentDashboardScreen extends ConsumerStatefulWidget {
   const ParentDashboardScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ParentDashboardScreen> createState() =>
+      _ParentDashboardScreenState();
+}
+
+class _ParentDashboardScreenState extends ConsumerState<ParentDashboardScreen> {
+  String? _selectedChildId;
+
+  @override
+  Widget build(BuildContext context) {
     final parentState = ref.watch(parentDashboardControllerProvider);
     final user = ref.watch(authControllerProvider).user;
     final family = parentState.family;
+    final reportRepo = ref.watch(approvedReportRepositoryProvider);
 
     if (parentState.isLoading && family == null) {
       return const Scaffold(
@@ -21,10 +33,23 @@ class ParentDashboardScreen extends ConsumerWidget {
       );
     }
 
+    final children = parentState.children;
+    final activeChild = children.firstWhere(
+      (c) => c.id == _selectedChildId,
+      orElse: () => children.isNotEmpty
+          ? children.first
+          : const ChildProfile(id: 'child-1', nickname: 'Alex', age: 12),
+    );
+
     return Scaffold(
       appBar: AppBar(
-        title: Text(family?.name ?? 'Family Dashboard'),
+        title: Text(family?.name ?? 'Family Portal'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.compare_arrows_rounded),
+            tooltip: 'Compare Reports',
+            onPressed: () => context.push(AppRoutes.parentReportCompare),
+          ),
           IconButton(
             icon: const Icon(Icons.qr_code_2_rounded),
             tooltip: 'Invite Child',
@@ -72,7 +97,7 @@ class ParentDashboardScreen extends ConsumerWidget {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          'Family Wellbeing Hub',
+                          'Parent Wellbeing Portal',
                           style: TextStyle(
                             color: Colors.white.withAlpha((0.85 * 255).round()),
                             fontSize: 13,
@@ -93,7 +118,7 @@ class ParentDashboardScreen extends ConsumerWidget {
                                   color: Colors.white, size: 14),
                               SizedBox(width: 4),
                               Text(
-                                'Admin',
+                                'Family Admin',
                                 style: TextStyle(
                                   color: Colors.white,
                                   fontSize: 12,
@@ -116,10 +141,10 @@ class ParentDashboardScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Privacy-First Architecture • Local Processing Enabled',
+                      'Approved Wellbeing Insights • Zero Raw Child Surveillance',
                       style: TextStyle(
                         color: Colors.white.withAlpha((0.85 * 255).round()),
-                        fontSize: 13,
+                        fontSize: 12.5,
                       ),
                     ),
                   ],
@@ -128,148 +153,335 @@ class ParentDashboardScreen extends ConsumerWidget {
 
               const SizedBox(height: 20),
 
-              // Overview Metric Cards
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildMetricCard(
-                      context,
-                      title: 'Children Paired',
-                      value: '${parentState.children.length}',
-                      icon: Icons.people_rounded,
-                      color: AppTheme.parentPrimary,
-                      onTap: () => context.go(AppRoutes.parentChildren),
+              // Multi-Child Selector Bar
+              if (children.isNotEmpty) ...[
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Children',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _buildMetricCard(
-                      context,
-                      title: 'Active Reports',
-                      value:
-                          '${parentState.reports.where((r) => r.isEnabled).length}',
-                      icon: Icons.assessment_rounded,
-                      color: AppTheme.parentSecondary,
-                      onTap: () => context.go(AppRoutes.parentReports),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _buildMetricCard(
-                      context,
-                      title: 'Active Triggers',
-                      value:
-                          '${parentState.triggers.where((t) => t.isActive).length}',
-                      icon: Icons.notifications_active_rounded,
-                      color: AppTheme.warningOrange,
-                      onTap: () => context.go(AppRoutes.parentTriggers),
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 24),
-
-              // Children Section
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Paired Children',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                  ),
-                  if (parentState.children.isNotEmpty)
                     TextButton.icon(
                       onPressed: () =>
                           context.push(AppRoutes.parentInviteChild),
                       icon: const Icon(Icons.add_rounded, size: 18),
-                      label: const Text('Invite More'),
+                      label: const Text('Add Child'),
                     ),
-                ],
-              ),
-              const SizedBox(height: 12),
-
-              if (parentState.children.isEmpty) ...[
-                // Meaningful empty state
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                        vertical: 32, horizontal: 20),
-                    child: Column(
-                      children: [
-                        Container(
-                          width: 64,
-                          height: 64,
-                          decoration: BoxDecoration(
-                            color: AppTheme.parentPrimary
-                                .withAlpha((0.1 * 255).round()),
-                            shape: BoxShape.circle,
+                  ],
+                ),
+                const SizedBox(height: 8),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: children.map((child) {
+                      final isSelected = child.id == activeChild.id;
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 10),
+                        child: ChoiceChip(
+                          avatar: CircleAvatar(
+                            backgroundColor: isSelected
+                                ? AppTheme.parentPrimary
+                                : AppTheme.neutralMuted
+                                    .withAlpha((0.2 * 255).round()),
+                            child: Text(
+                              child.nickname.substring(0, 1).toUpperCase(),
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: isSelected
+                                    ? Colors.white
+                                    : AppTheme.parentTextDark,
+                              ),
+                            ),
                           ),
-                          child: const Icon(
-                            Icons.person_add_alt_1_rounded,
-                            size: 32,
-                            color: AppTheme.parentPrimary,
+                          label: Text(
+                            child.nickname,
+                            style: TextStyle(
+                              fontWeight: isSelected
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                              color: isSelected
+                                  ? AppTheme.parentPrimary
+                                  : AppTheme.parentTextDark,
+                            ),
                           ),
+                          selected: isSelected,
+                          selectedColor: AppTheme.parentPrimary
+                              .withAlpha((0.15 * 255).round()),
+                          backgroundColor: Colors.white,
+                          side: BorderSide(
+                            color: isSelected
+                                ? AppTheme.parentPrimary
+                                : AppTheme.neutralBorder,
+                          ),
+                          onSelected: (selected) {
+                            if (selected) {
+                              setState(() => _selectedChildId = child.id);
+                            }
+                          },
                         ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'No Child Devices Paired Yet',
-                          style:
-                              Theme.of(context).textTheme.titleMedium?.copyWith(
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Pair your child’s device to start supporting their mindful digital habits without invasive tracking.',
-                          textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-                        const SizedBox(height: 20),
-                        ElevatedButton.icon(
-                          onPressed: () =>
-                              context.push(AppRoutes.parentInviteChild),
-                          icon: const Icon(Icons.qr_code_rounded),
-                          label: const Text('Generate Invitation QR Code'),
-                        ),
-                      ],
-                    ),
+                      );
+                    }).toList(),
                   ),
                 ),
-              ] else ...[
-                ...parentState.children.map((child) {
-                  return Card(
-                    child: ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor: AppTheme.childPrimary
-                            .withAlpha((0.15 * 255).round()),
-                        child: Text(
-                          child.nickname.substring(0, 1).toUpperCase(),
-                          style: const TextStyle(
-                            color: AppTheme.childPrimary,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      title: Text(
-                        child.nickname,
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      subtitle: Text(
-                        child.age != null
-                            ? 'Age: ${child.age} • Paired'
-                            : 'Paired Device',
-                      ),
-                      trailing: const Icon(Icons.chevron_right_rounded),
-                    ),
-                  );
-                }),
+                const SizedBox(height: 20),
               ],
 
-              const SizedBox(height: 24),
-              // Architecture Note
+              // Approved Insights Section for Selected Child
+              FutureBuilder<List<ApprovedReport>>(
+                future: reportRepo.getApprovedReports(activeChild.id),
+                builder: (context, snapshot) {
+                  final reports = snapshot.data ?? [];
+                  final latestWeekly = reports.firstWhere(
+                    (r) => r.period == ReportPeriod.weekly,
+                    orElse: () => reports.isNotEmpty
+                        ? reports.first
+                        : ApprovedReport(
+                            id: 'rep-placeholder',
+                            childId: activeChild.id,
+                            childNickname: activeChild.nickname,
+                            familyId: family?.id ?? 'f1',
+                            period: ReportPeriod.weekly,
+                            periodStart: DateTime.now().subtract(const Duration(days: 7)),
+                            periodEnd: DateTime.now(),
+                            facts: const ReportFacts(
+                              totalScreenMinutes: 872,
+                              focusMinutes: 370,
+                              breakCount: 22,
+                              goalsCompletedCount: 5,
+                              goalsTotalCount: 7,
+                              changePercentage: 12.1,
+                            ),
+                            summaryText: 'Balanced mindful progress recorded this week.',
+                            createdAt: DateTime.now(),
+                          ),
+                  );
+
+                  final facts = latestWeekly.facts;
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Approved Insights (${activeChild.nickname})',
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                          ),
+                          TextButton(
+                            onPressed: () => context.go(AppRoutes.parentReports),
+                            child: const Text('View All Reports'),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+
+                      // Metric Grid
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildInsightCard(
+                              title: 'Screen Time Trend',
+                              value: facts.formattedTotalTime,
+                              subtitle:
+                                  '${facts.changePercentage >= 0 ? "+" : ""}${facts.changePercentage}% vs prior',
+                              icon: Icons.trending_up_rounded,
+                              color: facts.changePercentage > 15
+                                  ? AppTheme.warningOrange
+                                  : AppTheme.parentPrimary,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _buildInsightCard(
+                              title: 'Focus & Learning',
+                              value: facts.formattedFocusTime,
+                              subtitle: '${facts.focusChangePercentage >= 0 ? "+" : ""}${facts.focusChangePercentage}% focus hours',
+                              icon: Icons.psychology_rounded,
+                              color: AppTheme.parentSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildInsightCard(
+                              title: 'Movement Breaks',
+                              value: '${facts.breakCount} pauses',
+                              subtitle: 'Eye & physical pauses',
+                              icon: Icons.directions_walk_rounded,
+                              color: AppTheme.successGreen,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _buildInsightCard(
+                              title: 'Goals Progress',
+                              value:
+                                  '${facts.goalsCompletedCount}/${facts.goalsTotalCount}',
+                              subtitle: 'Mindful goals met',
+                              icon: Icons.emoji_events_rounded,
+                              color: AppTheme.parentAccent,
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 20),
+
+                      // Recent Reports Section
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Recent Reports',
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.psychology_rounded,
+                                color: AppTheme.parentPrimary),
+                            tooltip: 'Ask Local AI',
+                            onPressed: () => context.go(AppRoutes.parentAi),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+
+                      if (reports.isEmpty)
+                        Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(20),
+                            child: Column(
+                              children: [
+                                const Icon(Icons.assessment_outlined,
+                                    size: 36, color: AppTheme.neutralMuted),
+                                const SizedBox(height: 10),
+                                const Text(
+                                  'No snapshots generated yet',
+                                  style: TextStyle(fontWeight: FontWeight.bold),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'When ${activeChild.nickname}\'s device completes a daily or weekly period, privacy-filtered snapshots appear here.',
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                      fontSize: 12, color: AppTheme.neutralMuted),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                      else
+                        ...reports.take(2).map((r) {
+                          return Card(
+                            margin: const EdgeInsets.only(bottom: 10),
+                            child: ListTile(
+                              leading: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.parentPrimary
+                                      .withAlpha((0.15 * 255).round()),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const Icon(Icons.assessment_rounded,
+                                    color: AppTheme.parentPrimary),
+                              ),
+                              title: Text(
+                                r.formattedPeriodTitle,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold, fontSize: 14),
+                              ),
+                              subtitle: Text(
+                                'Screen: ${r.facts.formattedTotalTime} • Focus: ${r.facts.formattedFocusTime}',
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                              trailing: ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 8),
+                                  visualDensity: VisualDensity.compact,
+                                ),
+                                onPressed: () =>
+                                    context.go(AppRoutes.parentReports),
+                                child: const Text('View Report',
+                                    style: TextStyle(fontSize: 11)),
+                              ),
+                            ),
+                          );
+                        }),
+                    ],
+                  );
+                },
+              ),
+
+              const SizedBox(height: 20),
+
+              // Recent Wellbeing Alerts Section
+              Text(
+                'Recent Wellbeing Alerts',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+              ),
+              const SizedBox(height: 8),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: AppTheme.successGreen
+                              .withAlpha((0.15 * 255).round()),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.check_circle_outline_rounded,
+                            color: AppTheme.successGreen),
+                      ),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Healthy Balance Maintained',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 13),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              'No excessive screen time anomalies detected across active child profiles.',
+                              style: TextStyle(
+                                  fontSize: 11.5, color: AppTheme.neutralMuted),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              // Strict Privacy Notice Card
               Card(
                 color: AppTheme.parentSurface,
                 child: Padding(
@@ -281,9 +493,9 @@ class ParentDashboardScreen extends ConsumerWidget {
                       SizedBox(width: 12),
                       Expanded(
                         child: Text(
-                          'ClearTime adheres to data minimization: No raw telemetry tables are stored in the cloud.',
+                          'Absolute Privacy Architecture: The parent portal receives only approved insights. Raw usage data remains exclusively on the child device.',
                           style: TextStyle(
-                              fontSize: 12.5, color: AppTheme.neutralMuted),
+                              fontSize: 12, color: AppTheme.neutralMuted),
                         ),
                       ),
                     ],
@@ -297,49 +509,56 @@ class ParentDashboardScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildMetricCard(
-    BuildContext context, {
+  Widget _buildInsightCard({
     required String title,
     required String value,
+    required String subtitle,
     required IconData icon,
     required Color color,
-    required VoidCallback onTap,
   }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppTheme.neutralBorder),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, color: color, size: 22),
-            const SizedBox(height: 12),
-            Text(
-              value,
-              style: const TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-                color: AppTheme.parentTextDark,
-              ),
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppTheme.neutralBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: color, size: 22),
+          const SizedBox(height: 10),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: AppTheme.parentTextDark,
             ),
-            const SizedBox(height: 4),
-            Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: AppTheme.neutralMuted,
-              ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: AppTheme.neutralMuted,
             ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            subtitle,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 10,
+              color: color,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -3,6 +3,7 @@ import '../models/llm_models.dart';
 abstract class LocalAISettingsRepository {
   Future<AISettings> getSettings();
   Future<void> saveSettings(AISettings settings);
+  Future<void> updateSettings(AISettings settings);
   Future<void> setAiEnabled(bool enabled);
   Future<void> setActiveModelId(String modelId);
   Future<void> resetToDefaults();
@@ -21,6 +22,11 @@ class InMemoryLocalAISettingsRepository implements LocalAISettingsRepository {
 
   @override
   Future<void> saveSettings(AISettings settings) async {
+    _settings = settings;
+  }
+
+  @override
+  Future<void> updateSettings(AISettings settings) async {
     _settings = settings;
   }
 

@@ -6,6 +6,7 @@ import 'package:cleartime/core/services/abstractions/device_provider.dart';
 import 'package:cleartime/core/services/abstractions/local_usage_store.dart';
 import 'package:cleartime/data/models/usage_models.dart';
 import 'package:cleartime/data/models/llm_models.dart';
+import 'package:cleartime/data/models/trigger_config_model.dart';
 
 // Mock implementations testing interface conformance
 class MockUsageDataProvider implements UsageDataProvider {
@@ -100,6 +101,9 @@ class MockNotificationProvider implements NotificationProvider {
   Future<void> cancelNotification(int id) async {}
 
   @override
+  Future<void> cancelAllNotifications() async {}
+
+  @override
   Future<bool> hasPermission() async => true;
 
   @override
@@ -109,10 +113,38 @@ class MockNotificationProvider implements NotificationProvider {
   Future<bool> requestPermission() async => true;
 
   @override
-  Future<void> showWellbeingNotification({
+  Future<void> showNotification({
     required int id,
     required String title,
     required String body,
+    String? channelId,
+    String? payload,
+    NotificationType notificationType = NotificationType.push,
+  }) async {}
+
+  @override
+  Future<void> showChildWellbeingNotification({
+    required int id,
+    required String title,
+    required String body,
+    String? payload,
+  }) async {}
+
+  @override
+  Future<void> showParentAlertNotification({
+    required int id,
+    required String title,
+    required String body,
+    String? payload,
+  }) async {}
+
+  @override
+  Future<void> scheduleNotification({
+    required int id,
+    required String title,
+    required String body,
+    required DateTime scheduledTime,
+    String? channelId,
     String? payload,
   }) async {}
 }
@@ -155,6 +187,11 @@ class MockLocalUsageStore implements LocalUsageStore {
 
   @override
   Future<List<DailyAggregate>> getWeeklyAggregate() async => [];
+
+  @override
+  Future<List<DailyAggregate>> getDailyAggregatesInRange(
+          String start, String end) async =>
+      [];
 
   @override
   Future<void> deleteUsage(String id) async {}

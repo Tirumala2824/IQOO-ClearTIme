@@ -310,6 +310,8 @@ class DailyAggregate {
     required this.calculatedAt,
   });
 
+  DateTime get date => DateTime.tryParse(dateString) ?? calculatedAt;
+
   Map<String, dynamic> toJson() => {
         'dateString': dateString,
         'totalMinutes': totalMinutes,

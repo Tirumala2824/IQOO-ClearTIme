@@ -131,19 +131,20 @@ void main() {
       final trigger = TriggerConfiguration(
         id: 't1',
         familyId: 'f1',
-        createdBy: 'u1',
-        name: 'Screen Limit',
-        triggerType: 'DOWNTIME',
-        thresholdMinutes: 90,
-        action: 'NOTIFY_PARENT',
-        isActive: true,
+        childId: 'c1',
+        type: TriggerType.usageIncrease,
+        threshold: 20.0,
+        enabled: true,
+        cooldown: const Duration(hours: 24),
+        notificationType: NotificationType.push,
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
       );
 
       final json = trigger.toJson();
-      expect(json['threshold_minutes'], equals(90));
-      expect(json['action'], equals('NOTIFY_PARENT'));
+      expect(json['threshold'], equals(20.0));
+      expect(json['type'], equals('usageIncrease'));
+      expect(json['cooldown_seconds'], equals(86400));
     });
 
     test('PrivacySetting serialization', () {

@@ -27,6 +27,9 @@ abstract class LocalUsageStore {
   /// Retrieves the past 7 daily aggregates for weekly calculations.
   Future<List<DailyAggregate>> getWeeklyAggregate();
 
+  /// Retrieves daily aggregates within an inclusive date range (YYYY-MM-DD format).
+  Future<List<DailyAggregate>> getDailyAggregatesInRange(String start, String end);
+
   /// Deletes a specific usage record by ID.
   Future<void> deleteUsage(String id);
 

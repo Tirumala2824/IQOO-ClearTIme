@@ -9,6 +9,7 @@ abstract class LocalPromptRepository {
   Future<void> deactivatePrompt(String id);
   Future<PromptDefinition> duplicatePrompt(String id);
   Future<PromptDefinition> resetToDefault(PromptType type);
+  Future<void> resetAllToDefaults();
   Future<List<PromptVersion>> getVersionHistory(String promptId);
   Future<PromptDefinition> rollbackToVersion(String promptId, int targetVersion);
 }
@@ -228,7 +229,15 @@ class InMemoryLocalPromptRepository implements LocalPromptRepository {
   Future<PromptDefinition> resetToDefault(PromptType type) async {
     final defaultId = 'prompt-${type.name}';
     _seedDefaults();
-    return _prompts[defaultId] ?? _prompts.values.firstWhere((p) => p.type == type);
+    return _prompts[defaultId] ??
+        _prompts.values.firstWhere((p) => p.type == type);
+  }
+
+  @override
+  Future<void> resetAllToDefaults() async {
+    _prompts.clear();
+    _history.clear();
+    _seedDefaults();
   }
 
   @override

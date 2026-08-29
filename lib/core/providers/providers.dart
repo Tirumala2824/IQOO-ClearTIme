@@ -8,14 +8,25 @@ import '../../data/repositories/local_achievement_repository.dart';
 import '../../data/repositories/local_reflection_repository.dart';
 import '../../data/repositories/local_ai_settings_repository.dart';
 import '../../data/repositories/local_prompt_repository.dart';
+import '../../data/repositories/approved_report_repository.dart';
+import '../../data/repositories/parent_report_settings_repository.dart';
+import '../../data/repositories/parent_conversation_repository.dart';
 import '../security/authorization_service.dart';
 import '../services/abstractions/usage_data_provider.dart';
 import '../services/abstractions/local_usage_store.dart';
 import '../services/abstractions/local_llm_provider.dart';
+import '../services/abstractions/notification_provider.dart';
+import '../services/abstractions/device_provider.dart';
+import '../platform/notification/native_notification_bridge.dart';
+import '../platform/device/native_device_provider.dart';
 import '../../services/usage/android_usage_data_provider.dart';
 import '../../services/usage/demo_usage_data_provider.dart';
 import '../../services/storage/secure_local_usage_store.dart';
 import '../../services/analytics/local_analytics_service.dart';
+import '../../services/analytics/child_report_builder.dart';
+import '../../services/analytics/report_comparison_service.dart';
+import '../../services/analytics/local_trigger_engine.dart';
+import '../../services/analytics/report_scheduler_service.dart';
 import '../../services/llm/on_device_llm_provider.dart';
 import '../../services/llm/local_ai_coach_service.dart';
 import '../../services/llm/parent_ai_service.dart';
@@ -176,3 +187,58 @@ final parentAIServiceProvider = Provider<ParentAIService>((ref) {
     fallbackService: fallback,
   );
 });
+
+// --- Phase 4 Parent Reports & Local Analytics Providers ---
+
+final approvedReportRepositoryProvider =
+    Provider<ApprovedReportRepository>((ref) {
+  return InMemoryApprovedReportRepository();
+});
+
+final parentReportSettingsRepositoryProvider =
+    Provider<ParentReportSettingsRepository>((ref) {
+  return InMemoryParentReportSettingsRepository();
+});
+
+final parentConversationRepositoryProvider =
+    Provider<ParentConversationRepository>((ref) {
+  return InMemoryParentConversationRepository();
+});
+
+final childReportBuilderProvider = Provider<ChildReportBuilder>((ref) {
+  return const ChildReportBuilder();
+});
+
+final reportComparisonServiceProvider =
+    Provider<ReportComparisonService>((ref) {
+  return const ReportComparisonService();
+});
+
+// --- Phase 5 Triggers, Notifications & Native Integration Providers ---
+
+final localTriggerEngineProvider = Provider<LocalTriggerEngine>((ref) {
+  return LocalTriggerEngine();
+});
+
+final notificationProvider = Provider<NotificationProvider>((ref) {
+  return NativeNotificationBridge();
+});
+
+final deviceProvider = Provider<DeviceProvider>((ref) {
+  return NativeDeviceProvider();
+});
+
+final reportSchedulerServiceProvider = Provider<ReportSchedulerService>((ref) {
+  final usageStore = ref.watch(localUsageStoreProvider) as SecureLocalUsageStore;
+  final analyticsService = ref.watch(localAnalyticsServiceProvider);
+  final reportBuilder = ref.watch(childReportBuilderProvider);
+  final reportRepo = ref.watch(approvedReportRepositoryProvider);
+
+  return ReportSchedulerService(
+    usageStore: usageStore,
+    analyticsService: analyticsService,
+    reportBuilder: reportBuilder,
+    reportRepo: reportRepo,
+  );
+});
+

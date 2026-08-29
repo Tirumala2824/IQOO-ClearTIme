@@ -28,6 +28,8 @@ import 'package:cleartime/features/parent/screens/prompt_manager_screen.dart';
 import 'package:cleartime/features/parent/screens/prompt_editor_screen.dart';
 import 'package:cleartime/features/parent/screens/ai_diagnostics_screen.dart';
 import 'package:cleartime/features/parent/screens/parent_ai_screen.dart';
+import 'package:cleartime/features/parent/screens/parent_reports_screen.dart';
+import 'package:cleartime/features/parent/screens/parent_report_compare_screen.dart';
 import 'package:cleartime/features/parent/controllers/parent_dashboard_controller.dart';
 import 'package:cleartime/features/family/controllers/invitation_controller.dart';
 import 'package:cleartime/features/family/screens/invite_child_screen.dart';
@@ -503,9 +505,22 @@ void main() {
 
     testWidgets('ParentAiScreen renders parent assistant with offline banner',
         (WidgetTester tester) async {
+      final fakeParent = UserProfile(
+        id: 'parent-123',
+        role: UserRole.parent,
+        email: 'parent@example.com',
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            authRepositoryProvider
+                .overrideWithValue(FakeAuthRepository(fakeParent)),
+            familyRepositoryProvider.overrideWithValue(FakeFamilyRepository()),
+            configurationRepositoryProvider
+                .overrideWithValue(FakeConfigurationRepository()),
             usageDataProvider.overrideWithValue(DemoUsageDataProvider()),
           ],
           child: const MaterialApp(
@@ -513,11 +528,80 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump();
 
       expect(find.text('Parent AI Assistant'), findsOneWidget);
-      expect(find.textContaining('100% On-Device AI'), findsOneWidget);
-      expect(find.text('Summarize today\'s balance'), findsOneWidget);
+      expect(find.textContaining('100% On-Device Inference'), findsOneWidget);
+      expect(find.text('Why did usage change this week?'), findsOneWidget);
+    });
+
+    testWidgets('ParentReportsScreen renders period tabs and configure button',
+        (WidgetTester tester) async {
+      final fakeParent = UserProfile(
+        id: 'parent-123',
+        role: UserRole.parent,
+        email: 'parent@example.com',
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            authRepositoryProvider
+                .overrideWithValue(FakeAuthRepository(fakeParent)),
+            familyRepositoryProvider.overrideWithValue(FakeFamilyRepository()),
+            configurationRepositoryProvider
+                .overrideWithValue(FakeConfigurationRepository()),
+          ],
+          child: const MaterialApp(
+            home: ParentReportsScreen(),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump();
+
+      expect(find.text('Approved Wellbeing Reports'), findsOneWidget);
+      expect(find.text('Daily Summaries'), findsOneWidget);
+      expect(find.text('Weekly Digests'), findsOneWidget);
+      expect(find.text('Configure Reports'), findsOneWidget);
+    });
+
+    testWidgets('ParentReportCompareScreen renders comparison cards and deterministic summary',
+        (WidgetTester tester) async {
+      final fakeParent = UserProfile(
+        id: 'parent-123',
+        role: UserRole.parent,
+        email: 'parent@example.com',
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            authRepositoryProvider
+                .overrideWithValue(FakeAuthRepository(fakeParent)),
+            familyRepositoryProvider.overrideWithValue(FakeFamilyRepository()),
+            configurationRepositoryProvider
+                .overrideWithValue(FakeConfigurationRepository()),
+          ],
+          child: const MaterialApp(
+            home: ParentReportCompareScreen(),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump();
+
+      expect(find.text('Compare Wellbeing Reports'), findsOneWidget);
+      expect(find.text('Deterministic Variance Metrics'), findsOneWidget);
+      expect(find.text('Explain Comparison with On-Device AI'), findsOneWidget);
     });
 
     testWidgets('InviteChildScreen renders pairing instructions and code generation',

@@ -11,6 +11,7 @@ import '../../../data/repositories/local_mission_repository.dart';
 import '../../../data/repositories/local_goal_repository.dart';
 import '../../../data/repositories/local_reflection_repository.dart';
 import '../../../core/services/abstractions/usage_data_provider.dart';
+import '../../../core/services/abstractions/notification_provider.dart';
 
 class ChildDashboardState {
   final ChildProfile? profile;
@@ -84,6 +85,7 @@ class ChildDashboardController extends StateNotifier<ChildDashboardState> {
   final LocalMissionRepository _missionRepository;
   final LocalGoalRepository _goalRepository;
   final LocalReflectionRepository _reflectionRepository;
+  final NotificationProvider _notificationProvider;
 
   ChildDashboardController({
     required FamilyRepository familyRepository,
@@ -91,11 +93,13 @@ class ChildDashboardController extends StateNotifier<ChildDashboardState> {
     required LocalMissionRepository missionRepository,
     required LocalGoalRepository goalRepository,
     required LocalReflectionRepository reflectionRepository,
+    required NotificationProvider notificationProvider,
   })  : _familyRepository = familyRepository,
         _usageDataProvider = usageDataProvider,
         _missionRepository = missionRepository,
         _goalRepository = goalRepository,
         _reflectionRepository = reflectionRepository,
+        _notificationProvider = notificationProvider,
         super(const ChildDashboardState());
 
   Future<void> loadDashboard(String userId) async {
@@ -148,6 +152,12 @@ class ChildDashboardController extends StateNotifier<ChildDashboardState> {
       );
     } else {
       await _missionRepository.completeMission(missionId);
+      // Gentle wellbeing celebration notification
+      await _notificationProvider.showChildWellbeingNotification(
+        id: missionId.hashCode.abs(),
+        title: 'Mission Complete! 🌟',
+        body: 'Awesome job completing "${mission.title}"! +${mission.points} wellbeing points earned.',
+      );
     }
 
     final updated = await _missionRepository.getMissions();
@@ -186,6 +196,7 @@ final childDashboardControllerProvider =
   final missionRepo = ref.watch(localMissionRepositoryProvider);
   final goalRepo = ref.watch(localGoalRepositoryProvider);
   final reflectionRepo = ref.watch(localReflectionRepositoryProvider);
+  final notifProvider = ref.watch(notificationProvider);
 
   return ChildDashboardController(
     familyRepository: familyRepo,
@@ -193,5 +204,6 @@ final childDashboardControllerProvider =
     missionRepository: missionRepo,
     goalRepository: goalRepo,
     reflectionRepository: reflectionRepo,
+    notificationProvider: notifProvider,
   );
 });

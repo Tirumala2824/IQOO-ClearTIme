@@ -104,6 +104,19 @@ class ChildSettingsScreen extends ConsumerWidget {
               padding: const EdgeInsets.all(16.0),
               child: Column(
                 children: [
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.privacy_tip_rounded,
+                        color: AppTheme.childSecondary, size: 28),
+                    title: const Text('Privacy Center 🛡️',
+                        style: TextStyle(fontWeight: FontWeight.bold)),
+                    subtitle: const Text(
+                        'Learn what stays on your phone and what reports are shared.'),
+                    trailing: const Icon(Icons.arrow_forward_ios_rounded,
+                        size: 14, color: AppTheme.neutralMuted),
+                    onTap: () => context.push(AppRoutes.childPrivacyCenter),
+                  ),
+                  const Divider(),
                   const ListTile(
                     contentPadding: EdgeInsets.zero,
                     leading: Icon(Icons.shield_outlined,

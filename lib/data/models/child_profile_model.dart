@@ -5,26 +5,29 @@ class ChildProfile {
   final String nickname;
   final int? age;
   final int avatarIndex;
-  final DateTime createdAt;
-  final DateTime updatedAt;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
 
   const ChildProfile({
     required this.id,
-    required this.userId,
-    required this.familyId,
+    this.userId = '',
+    this.familyId = '',
     required this.nickname,
     this.age,
     this.avatarIndex = 0,
-    required this.createdAt,
-    required this.updatedAt,
+    this.createdAt,
+    this.updatedAt,
   });
+
+  DateTime get creationDate => createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+  DateTime get updateDate => updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
 
   factory ChildProfile.fromJson(Map<String, dynamic> json) {
     return ChildProfile(
-      id: json['id'] as String,
-      userId: json['user_id'] as String,
-      familyId: json['family_id'] as String,
-      nickname: json['nickname'] as String,
+      id: json['id'] as String? ?? '',
+      userId: json['user_id'] as String? ?? '',
+      familyId: json['family_id'] as String? ?? '',
+      nickname: json['nickname'] as String? ?? 'Child',
       age: json['age'] as int?,
       avatarIndex: json['avatar_index'] as int? ?? 0,
       createdAt: json['created_at'] != null
@@ -44,8 +47,8 @@ class ChildProfile {
       'nickname': nickname,
       'age': age,
       'avatar_index': avatarIndex,
-      'created_at': createdAt.toIso8601String(),
-      'updated_at': updatedAt.toIso8601String(),
+      'created_at': (createdAt ?? DateTime.now()).toIso8601String(),
+      'updated_at': (updatedAt ?? DateTime.now()).toIso8601String(),
     };
   }
 

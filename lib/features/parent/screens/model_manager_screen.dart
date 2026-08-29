@@ -14,7 +14,6 @@ class ModelManagerScreen extends ConsumerStatefulWidget {
 class _ModelManagerScreenState extends ConsumerState<ModelManagerScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  bool _isLoading = false;
   List<LocalModelCatalogEntry> _installedModels = const [
     LocalModelCatalogEntry(
       id: 'slm-nano-380m',
@@ -188,15 +187,13 @@ class _ModelManagerScreenState extends ConsumerState<ModelManagerScreen>
           ],
         ),
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : TabBarView(
-              controller: _tabController,
-              children: [
-                _buildInstalledTab(),
-                _buildAvailableTab(),
-              ],
-            ),
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          _buildInstalledTab(),
+          _buildAvailableTab(),
+        ],
+      ),
     );
   }
 

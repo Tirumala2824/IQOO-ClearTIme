@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_routes.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/providers/providers.dart';
 import '../../../data/models/notification_pref_model.dart';
 import '../../../data/models/privacy_setting_model.dart';
 import '../../authentication/controllers/auth_controller.dart';
@@ -103,6 +104,40 @@ class ParentSettingsScreen extends ConsumerWidget {
 
           const SizedBox(height: 24),
           Text(
+            'Wellbeing Reports & Scheduling',
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          Card(
+            child: ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppTheme.parentPrimary.withAlpha((0.15 * 255).round()),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.assessment_rounded,
+                    color: AppTheme.parentPrimary, size: 24),
+              ),
+              title: const Text(
+                'Report Configurations',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+              ),
+              subtitle: const Text(
+                'Configure report frequencies, detail levels & sharing categories',
+                style: TextStyle(color: AppTheme.neutralMuted, fontSize: 12),
+              ),
+              trailing: const Icon(Icons.arrow_forward_ios_rounded,
+                  size: 14, color: AppTheme.neutralMuted),
+              onTap: () => context.push(AppRoutes.parentReports),
+            ),
+          ),
+
+          const SizedBox(height: 24),
+          Text(
             'Local AI Engine & Control Center',
             style: Theme.of(context)
                 .textTheme
@@ -182,7 +217,7 @@ class ParentSettingsScreen extends ConsumerWidget {
 
           const SizedBox(height: 24),
           Text(
-            'Privacy & Data Minimization',
+            'Privacy & Local Data Management',
             style: Theme.of(context)
                 .textTheme
                 .titleMedium
@@ -192,6 +227,27 @@ class ParentSettingsScreen extends ConsumerWidget {
           Card(
             child: Column(
               children: [
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppTheme.successGreen.withAlpha((0.15 * 255).round()),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(Icons.privacy_tip_rounded,
+                        color: AppTheme.successGreen, size: 22),
+                  ),
+                  title: const Text('Privacy Center',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                  subtitle: const Text(
+                    'Full transparency on local-only processing & data deletion',
+                    style: TextStyle(color: AppTheme.neutralMuted, fontSize: 12),
+                  ),
+                  trailing: const Icon(Icons.arrow_forward_ios_rounded,
+                      size: 14, color: AppTheme.neutralMuted),
+                  onTap: () => context.push(AppRoutes.parentPrivacyCenter),
+                ),
+                const Divider(height: 1),
                 SwitchListTile(
                   title: const Text('Local On-Device Processing Only'),
                   subtitle: const Text(
@@ -223,10 +279,28 @@ class ParentSettingsScreen extends ConsumerWidget {
                 ),
                 const Divider(height: 1),
                 ListTile(
-                  title: const Text('Data Retention Horizon'),
-                  subtitle: Text(
-                      '${privacy.dataRetentionDays} days (auto-pruned locally)'),
-                  trailing: const Icon(Icons.history_toggle_off_rounded),
+                  title: const Text('Clear Local Parent AI Chat History'),
+                  subtitle: const Text(
+                      'Purge all on-device conversation records for this device'),
+                  trailing: const Icon(Icons.delete_sweep_rounded,
+                      color: AppTheme.errorRed),
+                  onTap: () async {
+                    final convoRepo =
+                        ref.read(parentConversationRepositoryProvider);
+                    final children = parentState.children;
+                    for (final c in children) {
+                      await convoRepo.deleteAllConversations(c.id);
+                    }
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                              'Local parent chat history cleared completely.'),
+                          backgroundColor: AppTheme.parentPrimary,
+                        ),
+                      );
+                    }
+                  },
                 ),
               ],
             ),

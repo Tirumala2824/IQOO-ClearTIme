@@ -9,12 +9,20 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
-        // Register Android UsageStats platform channel
+        // 1. Register Android UsageStats platform channel
         val usageChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, UsageStatsHandler.CHANNEL_NAME)
         usageChannel.setMethodCallHandler(UsageStatsHandler(this))
 
-        // Register Local On-Device LLM platform channel
+        // 2. Register Local On-Device LLM platform channel
         val llmChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, LocalLlmHandler.CHANNEL_NAME)
         llmChannel.setMethodCallHandler(LocalLlmHandler(this))
+
+        // 3. Register Native Android Notification platform channel
+        val notificationChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, NotificationHandler.CHANNEL_NAME)
+        notificationChannel.setMethodCallHandler(NotificationHandler(this))
+
+        // 4. Register Device Information platform channel
+        val deviceChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, DeviceHandler.CHANNEL_NAME)
+        deviceChannel.setMethodCallHandler(DeviceHandler(this))
     }
 }

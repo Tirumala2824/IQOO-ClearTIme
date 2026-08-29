@@ -10,6 +10,8 @@ class AppRoutes {
   static const String parent = '/parent';
   static const String parentChildren = '/parent/children';
   static const String parentReports = '/parent/reports';
+  static const String parentReportDetail = '/parent/reports/detail';
+  static const String parentReportCompare = '/parent/reports/compare';
   static const String parentTriggers = '/parent/triggers';
   static const String parentAi = '/parent/ai';
   static const String parentSettings = '/parent/settings';
@@ -22,6 +24,7 @@ class AppRoutes {
   static const String promptEditor = '/parent/settings/ai/prompts/edit';
   static const String promptComparison = '/parent/settings/ai/prompts/compare';
   static const String aiDiagnostics = '/parent/settings/ai/diagnostics';
+  static const String parentPrivacyCenter = '/parent/settings/privacy';
 
   // Child routes
   static const String child = '/child';
@@ -33,4 +36,5 @@ class AppRoutes {
   static const String childSettings = '/child/settings';
   static const String childJoinFamily = '/child/join';
   static const String childAiSettings = '/child/settings/ai';
+  static const String childPrivacyCenter = '/child/settings/privacy';
 }

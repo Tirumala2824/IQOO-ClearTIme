@@ -13,7 +13,6 @@ class AiDiagnosticsScreen extends ConsumerStatefulWidget {
 }
 
 class _AiDiagnosticsScreenState extends ConsumerState<AiDiagnosticsScreen> {
-  bool _isLoading = false;
   AIDiagnostics? _diagnostics = AIDiagnostics(
     activeModel: 'ClearTime-SLM-Nano',
     version: '1.2.0',
@@ -84,13 +83,11 @@ class _AiDiagnosticsScreenState extends ConsumerState<AiDiagnosticsScreen> {
           ),
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
                   // Development/Admin Warning Banner
                   Container(
                     padding: const EdgeInsets.all(14),

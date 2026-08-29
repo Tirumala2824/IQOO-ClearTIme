@@ -15,7 +15,6 @@ class LocalAiSettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _LocalAiSettingsScreenState extends ConsumerState<LocalAiSettingsScreen> {
-  bool _isLoading = false;
   AISettings _settings = const AISettings();
   ModelInfo? _modelInfo = const ModelInfo(
     modelName: 'ClearTime-SLM-Nano',
@@ -106,13 +105,11 @@ class _LocalAiSettingsScreenState extends ConsumerState<LocalAiSettingsScreen> {
           ),
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(20.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
                   // Zero Cloud LLM Banner
                   _buildPrivacyBanner(),
                   const SizedBox(height: 20),

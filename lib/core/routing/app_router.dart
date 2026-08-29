@@ -11,6 +11,7 @@ import '../../features/parent/screens/parent_shell_screen.dart';
 import '../../features/parent/screens/parent_dashboard_screen.dart';
 import '../../features/parent/screens/parent_children_screen.dart';
 import '../../features/parent/screens/parent_reports_screen.dart';
+import '../../features/parent/screens/parent_report_compare_screen.dart';
 import '../../features/parent/screens/parent_triggers_screen.dart';
 import '../../features/parent/screens/parent_ai_screen.dart';
 import '../../features/parent/screens/parent_settings_screen.dart';
@@ -20,6 +21,7 @@ import '../../features/parent/screens/prompt_manager_screen.dart';
 import '../../features/parent/screens/prompt_editor_screen.dart';
 import '../../features/parent/screens/prompt_comparison_screen.dart';
 import '../../features/parent/screens/ai_diagnostics_screen.dart';
+import '../../features/parent/screens/privacy_center_screen.dart';
 import '../../features/child/screens/child_shell_screen.dart';
 import '../../features/child/screens/child_dashboard_screen.dart';
 import '../../features/child/screens/child_insights_screen.dart';
@@ -63,7 +65,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const JoinFamilyScreen(),
       ),
 
-      // Phase 3 Local AI Control Center Routes
+      // Phase 3 & 4 Routes
+      GoRoute(
+        path: AppRoutes.parentReportCompare,
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          return ParentReportCompareScreen(
+            initialReportIdA: extra?['reportA'] as String?,
+            initialReportIdB: extra?['reportB'] as String?,
+          );
+        },
+      ),
       GoRoute(
         path: AppRoutes.localAiSettings,
         builder: (context, state) => const LocalAiSettingsScreen(),
@@ -80,7 +92,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.promptEditor,
         builder: (context, state) {
           final extra = state.extra as Map<String, dynamic>?;
-          final promptId = extra?['promptId'] as String? ?? 'prompt-child-insight';
+          final promptId =
+              extra?['promptId'] as String? ?? 'prompt-child-insight';
           return PromptEditorScreen(promptId: promptId);
         },
       ),
@@ -88,7 +101,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.promptComparison,
         builder: (context, state) {
           final extra = state.extra as Map<String, dynamic>?;
-          final promptId = extra?['promptId'] as String? ?? 'prompt-child-insight';
+          final promptId =
+              extra?['promptId'] as String? ?? 'prompt-child-insight';
           final versionA = (extra?['versionA'] as num? ?? 1).toInt();
           final versionB = (extra?['versionB'] as num? ?? 2).toInt();
           return PromptComparisonScreen(
@@ -101,6 +115,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.aiDiagnostics,
         builder: (context, state) => const AiDiagnosticsScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.parentPrivacyCenter,
+        builder: (context, state) => const PrivacyCenterScreen(isChildView: false),
+      ),
+      GoRoute(
+        path: AppRoutes.childPrivacyCenter,
+        builder: (context, state) => const PrivacyCenterScreen(isChildView: true),
       ),
       GoRoute(
         path: AppRoutes.childAiSettings,
