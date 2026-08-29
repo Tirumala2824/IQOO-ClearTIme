@@ -1,0 +1,265 @@
+// ClearTime Phase 1 Prisma Schema
+// Used for backend database modeling, documentation, and migration verification
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum UserRole {
+  PARENT
+  CHILD
+}
+
+enum FamilyRole {
+  ADMIN
+  MEMBER
+}
+
+enum InvitationStatus {
+  ACTIVE
+  USED
+  EXPIRED
+  REVOKED
+}
+
+enum PairingStatus {
+  PENDING
+  ACTIVE
+  REVOKED
+}
+
+enum ReportFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+enum DeliveryChannel {
+  IN_APP
+  EMAIL
+}
+
+model Profile {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email       String?  @unique
+  phoneNumber String?  @unique @map("phone_number")
+  role        UserRole
+  displayName String?  @map("display_name")
+  avatarUrl   String?  @map("avatar_url")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  parentProfile          ParentProfile?
+  childProfile           ChildProfile?
+  familyMemberships      FamilyMember[]
+  createdInvitations     FamilyInvitation[]
+  devices                Device[]
+  privacySettings        PrivacySetting[]
+  notificationPreference NotificationPreference?
+  createdReports         ReportConfiguration[]
+  createdTriggers        TriggerConfiguration[]
+  administeredFamilies   Family[]               @relation("FamilyAdmin")
+
+  @@map("profiles")
+}
+
+model ParentProfile {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @unique @map("user_id") @db.Uuid
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  user          Profile                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  relationships ParentChildRelationship[]
+
+  @@map("parent_profiles")
+}
+
+model ChildProfile {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String   @unique @map("user_id") @db.Uuid
+  familyId    String   @map("family_id") @db.Uuid
+  nickname    String
+  age         Int?
+  avatarIndex Int      @default(0) @map("avatar_index")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  user          Profile                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  family        Family                    @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  relationships ParentChildRelationship[]
+
+  @@index([familyId])
+  @@map("child_profiles")
+}
+
+model Family {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String
+  adminUserId String   @map("admin_user_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  adminProfile         Profile                   @relation("FamilyAdmin", fields: [adminUserId], references: [id], onDelete: Restrict)
+  members              FamilyMember[]
+  children             ChildProfile[]
+  relationships        ParentChildRelationship[]
+  invitations          FamilyInvitation[]
+  devicePairings       DevicePairing[]
+  privacySettings      PrivacySetting[]
+  reportConfigurations ReportConfiguration[]
+  triggerConfigurations TriggerConfiguration[]
+
+  @@map("families")
+}
+
+model FamilyMember {
+  id        String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  familyId  String     @map("family_id") @db.Uuid
+  userId    String     @map("user_id") @db.Uuid
+  role      FamilyRole @default(MEMBER)
+  joinedAt  DateTime   @default(now()) @map("joined_at") @db.Timestamptz
+
+  family  Family  @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  profile Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([familyId, userId])
+  @@map("family_members")
+}
+
+model ParentChildRelationship {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  parentProfileId String   @map("parent_profile_id") @db.Uuid
+  childProfileId  String   @map("child_profile_id") @db.Uuid
+  familyId        String   @map("family_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  parent ParentProfile @relation(fields: [parentProfileId], references: [id], onDelete: Cascade)
+  child  ChildProfile  @relation(fields: [childProfileId], references: [id], onDelete: Cascade)
+  family Family        @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  @@unique([parentProfileId, childProfileId])
+  @@map("parent_child_relationships")
+}
+
+model Device {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId        String   @map("user_id") @db.Uuid
+  deviceName    String   @map("device_name")
+  model         String?
+  osVersion     String?  @map("os_version")
+  clientVersion String?  @map("client_version")
+  lastSeenAt    DateTime @default(now()) @map("last_seen_at") @db.Timestamptz
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  user     Profile         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pairings DevicePairing[]
+
+  @@map("devices")
+}
+
+model DevicePairing {
+  id        String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  deviceId  String        @map("device_id") @db.Uuid
+  familyId  String        @map("family_id") @db.Uuid
+  status    PairingStatus @default(ACTIVE)
+  pairedAt  DateTime      @default(now()) @map("paired_at") @db.Timestamptz
+
+  device Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  @@unique([deviceId, familyId])
+  @@map("device_pairings")
+}
+
+model FamilyInvitation {
+  id             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  familyId       String           @map("family_id") @db.Uuid
+  createdBy      String           @map("created_by") @db.Uuid
+  invitationCode String           @unique @map("invitation_code")
+  qrPayload      String           @map("qr_payload")
+  expiresAt      DateTime         @map("expires_at") @db.Timestamptz
+  maxUses        Int              @default(1) @map("max_uses")
+  usedCount      Int              @default(0) @map("used_count")
+  status         InvitationStatus @default(ACTIVE)
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz
+
+  family  Family  @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  creator Profile @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+
+  @@index([invitationCode])
+  @@map("family_invitations")
+}
+
+model PrivacySetting {
+  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  familyId            String   @map("family_id") @db.Uuid
+  userId              String   @map("user_id") @db.Uuid
+  anonymizeData       Boolean  @default(true) @map("anonymize_data")
+  localProcessingOnly Boolean  @default(true) @map("local_processing_only")
+  dataRetentionDays   Int      @default(30) @map("data_retention_days")
+  updatedAt           DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  family Family  @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  user   Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([familyId, userId])
+  @@map("privacy_settings")
+}
+
+model NotificationPreference {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId           String   @unique @map("user_id") @db.Uuid
+  familyId         String   @map("family_id") @db.Uuid
+  dailySummary     Boolean  @default(true) @map("daily_summary")
+  instantAlerts    Boolean  @default(true) @map("instant_alerts")
+  quietHoursStart  String?  @default("21:00") @map("quiet_hours_start")
+  quietHoursEnd    String?  @default("07:00") @map("quiet_hours_end")
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notification_preferences")
+}
+
+model ReportConfiguration {
+  id              String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  familyId        String          @map("family_id") @db.Uuid
+  createdBy       String          @map("created_by") @db.Uuid
+  title           String
+  frequency       ReportFrequency @default(WEEKLY)
+  deliveryChannel DeliveryChannel @default(IN_APP) @map("delivery_channel")
+  isEnabled       Boolean         @default(true) @map("is_enabled")
+  createdAt       DateTime        @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime        @updatedAt @map("updated_at") @db.Timestamptz
+
+  family  Family  @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  creator Profile @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+
+  @@map("report_configurations")
+}
+
+model TriggerConfiguration {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  familyId         String   @map("family_id") @db.Uuid
+  createdBy        String   @map("created_by") @db.Uuid
+  name             String
+  triggerType      String   @map("trigger_type")
+  thresholdMinutes Int      @map("threshold_minutes")
+  action           String   @default("NOTIFY_PARENT")
+  isActive         Boolean  @default(true) @map("is_active")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  family  Family  @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  creator Profile @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+
+  @@map("trigger_configurations")
+}
