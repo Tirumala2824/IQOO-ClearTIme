@@ -18,6 +18,7 @@ import '../../features/child/screens/child_shell_screen.dart';
 import '../../features/child/screens/child_dashboard_screen.dart';
 import '../../features/child/screens/child_insights_screen.dart';
 import '../../features/child/screens/child_missions_screen.dart';
+import '../../features/child/screens/child_goals_screen.dart';
 import '../../features/child/screens/child_progress_screen.dart';
 import '../../features/child/screens/child_ai_screen.dart';
 import '../../features/child/screens/child_settings_screen.dart';
@@ -102,6 +103,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: AppRoutes.childMissions,
             builder: (context, state) => const ChildMissionsScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.childGoals,
+            builder: (context, state) => const ChildGoalsScreen(),
           ),
           GoRoute(
             path: AppRoutes.childProgress,

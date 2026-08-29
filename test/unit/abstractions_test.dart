@@ -4,16 +4,11 @@ import 'package:cleartime/core/services/abstractions/local_llm_provider.dart';
 import 'package:cleartime/core/services/abstractions/notification_provider.dart';
 import 'package:cleartime/core/services/abstractions/device_provider.dart';
 import 'package:cleartime/core/services/abstractions/local_usage_store.dart';
+import 'package:cleartime/data/models/usage_models.dart';
+import 'package:cleartime/data/models/llm_models.dart';
 
 // Mock implementations testing interface conformance
 class MockUsageDataProvider implements UsageDataProvider {
-  @override
-  Future<Map<String, dynamic>> getAggregatedUsage({
-    required DateTime start,
-    required DateTime end,
-  }) async =>
-      {'totalMinutes': 45};
-
   @override
   Future<bool> hasUsagePermission() async => true;
 
@@ -21,28 +16,58 @@ class MockUsageDataProvider implements UsageDataProvider {
   Future<bool> requestUsagePermission() async => true;
 
   @override
-  Stream<Map<String, dynamic>> watchLocalEvents() => const Stream.empty();
+  Future<UsageSummary> getTodayUsage() async => const UsageSummary(
+        totalMinutes: 120,
+        focusMinutes: 60,
+        breakCount: 4,
+      );
+
+  @override
+  Future<List<DailyUsage>> getDailyUsage() async => [];
+
+  @override
+  Future<List<DailyUsage>> getWeeklyUsage() async => [];
+
+  @override
+  Future<List<DailyUsage>> getMonthlyUsage() async => [];
+
+  @override
+  Future<List<CategoryUsage>> getCategoryUsage() async => [];
+
+  @override
+  Future<List<UsageTimelineEntry>> getUsageTimeline() async => [];
+
+  @override
+  Future<List<FocusSession>> getFocusSessions() async => [];
 }
 
 class MockLocalLLMProvider implements LocalLLMProvider {
   @override
-  Future<void> dispose() async {}
+  Future<bool> isAvailable() async => true;
 
   @override
-  Future<String> generateWellbeingInsight({
-    required Map<String, dynamic> localSummary,
-    required String contextPrompt,
-  }) async =>
+  Future<void> loadModel() async {}
+
+  @override
+  Future<void> unloadModel() async {}
+
+  @override
+  Future<String> generate({required String prompt}) async =>
       'Great mindful balance today!';
 
   @override
-  Future<bool> isModelReady() async => true;
+  Future<ModelInfo> getModelInfo() async => const ModelInfo(
+        modelName: 'ClearTime-SLM-Nano',
+        version: '1.0.0',
+        contextLimit: 2048,
+        quantization: 'q4_k_m',
+        sizeMb: 450,
+        isLoaded: true,
+        engineType: 'On-Device GGUF/MediaPipe',
+      );
 
   @override
-  Future<void> prepareModel(
-      {void Function(double progress)? onProgress}) async {
-    onProgress?.call(1.0);
-  }
+  Future<int> getContextLimit() async => 2048;
 }
 
 class MockNotificationProvider implements NotificationProvider {
@@ -86,48 +111,51 @@ class MockDeviceProvider implements DeviceProvider {
 
 class MockLocalUsageStore implements LocalUsageStore {
   @override
-  Future<List<Map<String, dynamic>>> getSnapshots({
-    required DateTime start,
-    required DateTime end,
-  }) async =>
-      [];
-
-  @override
   Future<void> initialize() async {}
 
   @override
-  Future<int> purgeOldSnapshots({required int retentionDays}) async => 5;
+  Future<void> saveUsage(UsageRecord usage) async {}
 
   @override
-  Future<void> saveAggregatedSnapshot({
-    required DateTime date,
-    required Map<String, dynamic> summary,
-  }) async {}
+  Future<void> saveUsageBatch(List<UsageRecord> records) async {}
+
+  @override
+  Future<List<UsageRecord>> getUsage({DateTime? start, DateTime? end}) async => [];
+
+  @override
+  Future<void> saveDailyAggregate(DailyAggregate aggregate) async {}
+
+  @override
+  Future<DailyAggregate?> getDailyAggregate(DateTime date) async => null;
+
+  @override
+  Future<List<DailyAggregate>> getWeeklyAggregate() async => [];
+
+  @override
+  Future<void> deleteUsage(String id) async {}
+
+  @override
+  Future<int> deleteExpiredUsage() async => 5;
 
   @override
   Future<void> wipeAllLocalData() async {}
 }
 
 void main() {
-  group('Future Service Abstractions Interface Conformance', () {
+  group('Phase 2 Service Abstractions Interface Conformance', () {
     test('UsageDataProvider contract functions correctly', () async {
       final provider = MockUsageDataProvider();
       expect(await provider.hasUsagePermission(), isTrue);
-      final usage = await provider.getAggregatedUsage(
-        start: DateTime.now().subtract(const Duration(days: 1)),
-        end: DateTime.now(),
-      );
-      expect(usage['totalMinutes'], equals(45));
+      final usage = await provider.getTodayUsage();
+      expect(usage.totalMinutes, equals(120));
+      expect(usage.focusMinutes, equals(60));
     });
 
     test('LocalLLMProvider operates without external cloud dependencies',
         () async {
       final llm = MockLocalLLMProvider();
-      expect(await llm.isModelReady(), isTrue);
-      final insight = await llm.generateWellbeingInsight(
-        localSummary: {},
-        contextPrompt: 'Generate daily positive encouragement',
-      );
+      expect(await llm.isAvailable(), isTrue);
+      final insight = await llm.generate(prompt: 'Hello Buddy');
       expect(insight, contains('mindful'));
     });
 
@@ -141,7 +169,7 @@ void main() {
       expect(await device.getDeviceName(), equals('Pixel 8 Pro'));
 
       final store = MockLocalUsageStore();
-      final purged = await store.purgeOldSnapshots(retentionDays: 30);
+      final purged = await store.deleteExpiredUsage();
       expect(purged, equals(5));
     });
   });

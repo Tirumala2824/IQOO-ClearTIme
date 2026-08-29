@@ -19,6 +19,7 @@ class AppRoutes {
   static const String child = '/child';
   static const String childInsights = '/child/insights';
   static const String childMissions = '/child/missions';
+  static const String childGoals = '/child/goals';
   static const String childProgress = '/child/progress';
   static const String childAi = '/child/ai';
   static const String childSettings = '/child/settings';

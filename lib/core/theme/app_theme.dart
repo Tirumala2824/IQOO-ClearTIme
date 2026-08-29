@@ -23,9 +23,11 @@ class AppTheme {
   // Shared
   static const Color neutralMuted = Color(0xFF64748B);
   static const Color neutralBorder = Color(0xFFE2E8F0);
+  static const Color neutralBg = Color(0xFFF1F5F9);
   static const Color successGreen = Color(0xFF22C55E);
   static const Color warningOrange = Color(0xFFF97316);
   static const Color errorRed = Color(0xFFEF4444);
+  static const Color alertRed = Color(0xFFEF4444);
 
   static ThemeData lightTheme({bool isChildTheme = false}) {
     final primary = isChildTheme ? childPrimary : parentPrimary;

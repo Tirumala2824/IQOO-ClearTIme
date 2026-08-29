@@ -2,76 +2,76 @@ import 'package:flutter_riverpod/flutter_riverpod.dart' hide Family;
 import '../../../core/providers/providers.dart';
 import '../../../data/models/child_profile_model.dart';
 import '../../../data/models/family_model.dart';
+import '../../../data/models/usage_models.dart';
+import '../../../data/models/mission_model.dart';
+import '../../../data/models/goal_model.dart';
+import '../../../data/models/reflection_model.dart';
 import '../../../data/repositories/family_repository.dart';
+import '../../../data/repositories/local_mission_repository.dart';
+import '../../../data/repositories/local_goal_repository.dart';
+import '../../../data/repositories/local_reflection_repository.dart';
+import '../../../core/services/abstractions/usage_data_provider.dart';
 
 class ChildDashboardState {
   final ChildProfile? profile;
   final Family? family;
-  final List<Map<String, dynamic>> missions;
+  final UsageSummary usageSummary;
+  final bool hasPermission;
+  final List<ChildMission> missions;
+  final List<ChildGoal> goals;
+  final DailyReflection? todayReflection;
   final bool isLoading;
   final String? errorMessage;
 
   const ChildDashboardState({
     this.profile,
     this.family,
-    this.missions = const [
-      {
-        'id': 'm1',
-        'title': 'Mindful Evening Wind-Down',
-        'description':
-            'Enjoy 30 minutes of screen-free relaxing time before bed.',
-        'points': 50,
-        'isCompleted': false,
-        'category': 'Rest & Recovery',
-      },
-      {
-        'id': 'm2',
-        'title': 'Outdoor Sunlight Break',
-        'description': 'Spend 20 mindful minutes playing or walking outside.',
-        'points': 40,
-        'isCompleted': true,
-        'category': 'Physical Activity',
-      },
-      {
-        'id': 'm3',
-        'title': 'Deep Focus Study Sprint',
-        'description': 'Complete a 25-minute undistracted learning session.',
-        'points': 60,
-        'isCompleted': false,
-        'category': 'Focus & Learning',
-      },
-      {
-        'id': 'm4',
-        'title': 'Screen-Free Family Meal',
-        'description': 'Share a healthy meal and conversation with family.',
-        'points': 45,
-        'isCompleted': false,
-        'category': 'Family Connection',
-      },
-    ],
+    this.usageSummary = const UsageSummary(
+      totalMinutes: 0,
+      focusMinutes: 0,
+      breakCount: 0,
+      screenUnlockCount: 0,
+      categories: [],
+      topApps: [],
+    ),
+    this.hasPermission = true,
+    this.missions = const [],
+    this.goals = const [],
+    this.todayReflection,
     this.isLoading = false,
     this.errorMessage,
   });
 
   bool get hasFamily => family != null;
   int get completedMissionsCount =>
-      missions.where((m) => m['isCompleted'] == true).length;
+      missions.where((m) => m.isCompleted).length;
   int get totalPoints => missions
-      .where((m) => m['isCompleted'] == true)
-      .fold(0, (sum, m) => sum + (m['points'] as int));
+      .where((m) => m.isCompleted)
+      .fold(0, (sum, m) => sum + m.points);
 
   ChildDashboardState copyWith({
     ChildProfile? profile,
     Family? family,
-    List<Map<String, dynamic>>? missions,
+    UsageSummary? usageSummary,
+    bool? hasPermission,
+    List<ChildMission>? missions,
+    List<ChildGoal>? goals,
+    DailyReflection? todayReflection,
     bool? isLoading,
     String? errorMessage,
     bool clearError = false,
+    bool clearReflection = false,
   }) {
     return ChildDashboardState(
       profile: profile ?? this.profile,
       family: family ?? this.family,
+      usageSummary: usageSummary ?? this.usageSummary,
+      hasPermission: hasPermission ?? this.hasPermission,
       missions: missions ?? this.missions,
+      goals: goals ?? this.goals,
+      todayReflection: clearReflection
+          ? null
+          : (todayReflection ?? this.todayReflection),
       isLoading: isLoading ?? this.isLoading,
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
     );
@@ -80,9 +80,23 @@ class ChildDashboardState {
 
 class ChildDashboardController extends StateNotifier<ChildDashboardState> {
   final FamilyRepository _familyRepository;
+  final UsageDataProvider _usageDataProvider;
+  final LocalMissionRepository _missionRepository;
+  final LocalGoalRepository _goalRepository;
+  final LocalReflectionRepository _reflectionRepository;
 
-  ChildDashboardController(this._familyRepository)
-      : super(const ChildDashboardState());
+  ChildDashboardController({
+    required FamilyRepository familyRepository,
+    required UsageDataProvider usageDataProvider,
+    required LocalMissionRepository missionRepository,
+    required LocalGoalRepository goalRepository,
+    required LocalReflectionRepository reflectionRepository,
+  })  : _familyRepository = familyRepository,
+        _usageDataProvider = usageDataProvider,
+        _missionRepository = missionRepository,
+        _goalRepository = goalRepository,
+        _reflectionRepository = reflectionRepository,
+        super(const ChildDashboardState());
 
   Future<void> loadDashboard(String userId) async {
     state = state.copyWith(isLoading: true, clearError: true);
@@ -92,9 +106,21 @@ class ChildDashboardController extends StateNotifier<ChildDashboardState> {
       if (profile != null) {
         family = await _familyRepository.getFamilyForUser(userId);
       }
+
+      final hasPermission = await _usageDataProvider.hasUsagePermission();
+      final usageSummary = await _usageDataProvider.getTodayUsage();
+      final missions = await _missionRepository.getMissions();
+      final goals = await _goalRepository.getGoals();
+      final reflection = await _reflectionRepository.getTodayReflection();
+
       state = state.copyWith(
         profile: profile,
         family: family,
+        hasPermission: hasPermission,
+        usageSummary: usageSummary,
+        missions: missions,
+        goals: goals,
+        todayReflection: reflection,
         isLoading: false,
       );
     } catch (e) {
@@ -102,23 +128,70 @@ class ChildDashboardController extends StateNotifier<ChildDashboardState> {
     }
   }
 
-  void toggleMission(String missionId) {
-    final updatedMissions = state.missions.map((m) {
-      if (m['id'] == missionId) {
-        return {
-          ...m,
-          'isCompleted': !(m['isCompleted'] as bool),
-        };
-      }
-      return m;
-    }).toList();
+  Future<void> requestUsagePermission() async {
+    await _usageDataProvider.requestUsagePermission();
+    final hasPerm = await _usageDataProvider.hasUsagePermission();
+    final usage = await _usageDataProvider.getTodayUsage();
+    state = state.copyWith(hasPermission: hasPerm, usageSummary: usage);
+  }
 
-    state = state.copyWith(missions: updatedMissions);
+  Future<void> toggleMission(String missionId) async {
+    final mission = await _missionRepository.getMissionById(missionId);
+    if (mission == null) return;
+
+    if (mission.isCompleted) {
+      await _missionRepository.saveMission(
+        mission.copyWith(
+          status: MissionStatus.available,
+          currentMinutes: 0,
+        ),
+      );
+    } else {
+      await _missionRepository.completeMission(missionId);
+    }
+
+    final updated = await _missionRepository.getMissions();
+    state = state.copyWith(missions: updated);
+  }
+
+  Future<void> saveReflection({
+    required ReflectionMood mood,
+    String? notes,
+  }) async {
+    final now = DateTime.now();
+    final reflection = DailyReflection(
+      id: 'ref-${now.millisecondsSinceEpoch}',
+      date: DateTime(now.year, now.month, now.day),
+      mood: mood,
+      notes: notes,
+      createdAt: now,
+    );
+    await _reflectionRepository.saveReflection(reflection);
+    state = state.copyWith(todayReflection: reflection);
+  }
+
+  Future<void> deleteTodayReflection() async {
+    final current = state.todayReflection;
+    if (current != null) {
+      await _reflectionRepository.deleteReflection(current.id);
+      state = state.copyWith(clearReflection: true);
+    }
   }
 }
 
 final childDashboardControllerProvider =
     StateNotifierProvider<ChildDashboardController, ChildDashboardState>((ref) {
   final familyRepo = ref.watch(familyRepositoryProvider);
-  return ChildDashboardController(familyRepo);
+  final usageProvider = ref.watch(usageDataProvider);
+  final missionRepo = ref.watch(localMissionRepositoryProvider);
+  final goalRepo = ref.watch(localGoalRepositoryProvider);
+  final reflectionRepo = ref.watch(localReflectionRepositoryProvider);
+
+  return ChildDashboardController(
+    familyRepository: familyRepo,
+    usageDataProvider: usageProvider,
+    missionRepository: missionRepo,
+    goalRepository: goalRepo,
+    reflectionRepository: reflectionRepo,
+  );
 });

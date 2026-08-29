@@ -13,9 +13,10 @@ class ChildShellScreen extends StatelessWidget {
     if (location == AppRoutes.child) return 0;
     if (location.startsWith(AppRoutes.childInsights)) return 1;
     if (location.startsWith(AppRoutes.childMissions)) return 2;
-    if (location.startsWith(AppRoutes.childProgress)) return 3;
-    if (location.startsWith(AppRoutes.childAi)) return 4;
-    if (location.startsWith(AppRoutes.childSettings)) return 5;
+    if (location.startsWith(AppRoutes.childGoals)) return 3;
+    if (location.startsWith(AppRoutes.childProgress)) return 4;
+    if (location.startsWith(AppRoutes.childAi)) return 5;
+    if (location.startsWith(AppRoutes.childSettings)) return 6;
     return 0;
   }
 
@@ -31,12 +32,15 @@ class ChildShellScreen extends StatelessWidget {
         context.go(AppRoutes.childMissions);
         break;
       case 3:
-        context.go(AppRoutes.childProgress);
+        context.go(AppRoutes.childGoals);
         break;
       case 4:
-        context.go(AppRoutes.childAi);
+        context.go(AppRoutes.childProgress);
         break;
       case 5:
+        context.go(AppRoutes.childAi);
+        break;
+      case 6:
         context.go(AppRoutes.childSettings);
         break;
     }
@@ -71,6 +75,12 @@ class ChildShellScreen extends StatelessWidget {
             selectedIcon:
                 Icon(Icons.flag_rounded, color: AppTheme.childSecondary),
             label: 'Missions',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.track_changes_rounded),
+            selectedIcon:
+                Icon(Icons.track_changes_rounded, color: AppTheme.childSecondary),
+            label: 'Goals',
           ),
           NavigationDestination(
             icon: Icon(Icons.military_tech_outlined),

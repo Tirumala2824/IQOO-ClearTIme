@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme.dart';
-import '../controllers/child_dashboard_controller.dart';
+import '../../../data/models/achievement_model.dart';
+import '../controllers/child_achievements_controller.dart';
+import '../controllers/child_missions_controller.dart';
 
 class ChildProgressScreen extends ConsumerWidget {
   const ChildProgressScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final childState = ref.watch(childDashboardControllerProvider);
+    final achState = ref.watch(childAchievementsControllerProvider);
+    final missionsState = ref.watch(childMissionsControllerProvider);
 
     return Scaffold(
       backgroundColor: AppTheme.childSurface,
@@ -33,7 +36,7 @@ class ChildProgressScreen extends ConsumerWidget {
                     color: AppTheme.childAccent, size: 48),
                 const SizedBox(height: 8),
                 Text(
-                  '${childState.totalPoints} Total XP',
+                  '${missionsState.totalPoints} Total XP',
                   style: const TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.w800,
@@ -41,9 +44,10 @@ class ChildProgressScreen extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: 4),
-                const Text(
-                  'Keep completing mindful quests to reach Level 2!',
-                  style: TextStyle(color: AppTheme.neutralMuted, fontSize: 13),
+                Text(
+                  '${achState.unlockedCount} of ${achState.achievements.length} Badges Unlocked',
+                  style: const TextStyle(
+                      color: AppTheme.neutralMuted, fontSize: 13),
                 ),
               ],
             ),
@@ -59,63 +63,38 @@ class ChildProgressScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 12),
 
-          GridView.count(
-            crossAxisCount: 2,
+          GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-            children: [
-              _buildBadgeItem(
-                icon: Icons.wb_sunny_rounded,
-                title: 'Sunlight Explorer',
-                subtitle: 'Outdoor play master',
-                isUnlocked: true,
-                color: AppTheme.childAccent,
-              ),
-              _buildBadgeItem(
-                icon: Icons.bolt_rounded,
-                title: 'Focus Champion',
-                subtitle: 'Undistracted sessions',
-                isUnlocked: true,
-                color: AppTheme.childPrimary,
-              ),
-              _buildBadgeItem(
-                icon: Icons.bedtime_rounded,
-                title: 'Rest Master',
-                subtitle: '3-day evening pause',
-                isUnlocked: false,
-                color: AppTheme.neutralMuted,
-              ),
-              _buildBadgeItem(
-                icon: Icons.family_restroom_rounded,
-                title: 'Family Champion',
-                subtitle: 'Screen-free dinners',
-                isUnlocked: false,
-                color: AppTheme.neutralMuted,
-              ),
-            ],
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+              childAspectRatio: 0.85,
+            ),
+            itemCount: achState.achievements.length,
+            itemBuilder: (context, index) {
+              final ach = achState.achievements[index];
+              return _buildAchievementCard(ach);
+            },
           ),
         ],
       ),
     );
   }
 
-  Widget _buildBadgeItem({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required bool isUnlocked,
-    required Color color,
-  }) {
+  Widget _buildAchievementCard(ChildAchievement ach) {
+    final isUnlocked = ach.isUnlocked;
+    final color = isUnlocked ? AppTheme.childSecondary : AppTheme.neutralMuted;
+
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
           color: isUnlocked
-              ? color.withAlpha((0.5 * 255).round())
+              ? AppTheme.childSecondary.withAlpha((0.5 * 255).round())
               : AppTheme.neutralBorder,
           width: isUnlocked ? 1.5 : 1,
         ),
@@ -126,35 +105,62 @@ class ChildProgressScreen extends ConsumerWidget {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: (isUnlocked ? color : AppTheme.neutralMuted)
-                  .withAlpha((0.15 * 255).round()),
+              color: color.withAlpha((0.15 * 255).round()),
               shape: BoxShape.circle,
             ),
             child: Icon(
-              icon,
-              color: isUnlocked ? color : AppTheme.neutralMuted,
-              size: 28,
+              _getIconData(ach.icon),
+              color: color,
+              size: 26,
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           Text(
-            title,
+            ach.title,
             textAlign: TextAlign.center,
             style: TextStyle(
               fontWeight: FontWeight.bold,
               fontSize: 13,
-              color:
-                  isUnlocked ? AppTheme.childTextDark : AppTheme.neutralMuted,
+              color: isUnlocked ? AppTheme.childTextDark : AppTheme.neutralMuted,
             ),
           ),
           const SizedBox(height: 2),
           Text(
-            subtitle,
+            ach.description,
             textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 11, color: AppTheme.neutralMuted),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 10.5, color: AppTheme.neutralMuted),
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: ach.progress,
+              backgroundColor: AppTheme.neutralBg,
+              valueColor: AlwaysStoppedAnimation<Color>(color),
+              minHeight: 4,
+            ),
           ),
         ],
       ),
     );
+  }
+
+  IconData _getIconData(String iconName) {
+    switch (iconName) {
+      case 'bolt_rounded':
+        return Icons.bolt_rounded;
+      case 'self_improvement_rounded':
+        return Icons.self_improvement_rounded;
+      case 'psychology_rounded':
+        return Icons.psychology_rounded;
+      case 'calendar_month_rounded':
+        return Icons.calendar_month_rounded;
+      case 'military_tech_rounded':
+        return Icons.military_tech_rounded;
+      default:
+        return Icons.star_rounded;
+    }
   }
 }

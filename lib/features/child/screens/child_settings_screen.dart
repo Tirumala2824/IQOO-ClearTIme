@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_routes.dart';
+import '../../../core/providers/providers.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../authentication/controllers/auth_controller.dart';
 import '../controllers/child_dashboard_controller.dart';
@@ -66,7 +67,7 @@ class ChildSettingsScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 20),
           Text(
-            'Privacy Protection',
+            'Privacy & Local Storage',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.bold,
                   color: AppTheme.childTextDark,
@@ -77,14 +78,53 @@ class ChildSettingsScreen extends ConsumerWidget {
             child: Padding(
               padding: const EdgeInsets.all(16.0),
               child: Column(
-                children: const [
-                  ListTile(
+                children: [
+                  const ListTile(
                     contentPadding: EdgeInsets.zero,
                     leading: Icon(Icons.shield_outlined,
                         color: AppTheme.childSecondary),
-                    title: Text('Data Minimization Guarantee'),
+                    title: Text('100% On-Device Storage'),
                     subtitle: Text(
-                        'Your individual screen logs and chats are never sent to cloud servers.'),
+                        'Your usage records, chats, and reflections are encrypted and stay on this phone.'),
+                  ),
+                  const Divider(),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.auto_delete_outlined,
+                        color: AppTheme.warningOrange),
+                    title: const Text('Auto-Retention Cleanup'),
+                    subtitle: const Text('Local records older than 30 days are automatically deleted.'),
+                    trailing: TextButton(
+                      onPressed: () async {
+                        final count = await ref.read(localUsageStoreProvider).deleteExpiredUsage();
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Retention cleanup complete! $count records pruned.')),
+                          );
+                        }
+                      },
+                      child: const Text('Clean Now'),
+                    ),
+                  ),
+                  const Divider(),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.delete_forever_outlined,
+                        color: AppTheme.alertRed),
+                    title: const Text('Wipe All Local Usage Data'),
+                    subtitle: const Text('Permanently erase all local usage records and reflections.'),
+                    trailing: TextButton(
+                      onPressed: () async {
+                        await ref.read(localUsageStoreProvider).wipeAllLocalData();
+                        await ref.read(localReflectionRepositoryProvider).clearAllReflections();
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('All local usage data wiped successfully.')),
+                          );
+                        }
+                      },
+                      child: const Text('Wipe Data', style: TextStyle(color: AppTheme.alertRed)),
+                    ),
                   ),
                 ],
               ),

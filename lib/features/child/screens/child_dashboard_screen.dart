@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_routes.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../data/models/reflection_model.dart';
 import '../controllers/child_dashboard_controller.dart';
+import 'child_reflection_dialog.dart';
 
 class ChildDashboardScreen extends ConsumerWidget {
   const ChildDashboardScreen({super.key});
@@ -13,19 +15,66 @@ class ChildDashboardScreen extends ConsumerWidget {
     final childState = ref.watch(childDashboardControllerProvider);
     final profile = childState.profile;
     final family = childState.family;
+    final usage = childState.usageSummary;
+    final reflection = childState.todayReflection;
 
     return Scaffold(
       backgroundColor: AppTheme.childSurface,
       appBar: AppBar(
         backgroundColor: AppTheme.childSurface,
         title: Text('Hey, ${profile?.nickname ?? "Explorer"}! 👋'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh_rounded),
+            onPressed: () {
+              ref
+                  .read(childDashboardControllerProvider.notifier)
+                  .loadDashboard(profile?.userId ?? '');
+            },
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Positive Points Hero Card
+            // Usage Permission Warning Card (if native permission not granted)
+            if (!childState.hasPermission)
+              Container(
+                margin: const EdgeInsets.only(bottom: 16),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppTheme.warningOrange.withAlpha((0.15 * 255).round()),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppTheme.warningOrange.withAlpha((0.5 * 255).round())),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.security_update_warning_rounded, color: AppTheme.warningOrange),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Text(
+                        'Enable Usage Access to track your focus quests locally.',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.warningOrange,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      ),
+                      onPressed: () {
+                        ref.read(childDashboardControllerProvider.notifier).requestUsagePermission();
+                      },
+                      child: const Text('Enable', style: TextStyle(fontSize: 12)),
+                    ),
+                  ],
+                ),
+              ),
+
+            // Hero Points Card
             Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
@@ -37,8 +86,7 @@ class ChildDashboardScreen extends ConsumerWidget {
                 borderRadius: BorderRadius.circular(24),
                 boxShadow: [
                   BoxShadow(
-                    color:
-                        AppTheme.childPrimary.withAlpha((0.25 * 255).round()),
+                    color: AppTheme.childPrimary.withAlpha((0.25 * 255).round()),
                     blurRadius: 16,
                     offset: const Offset(0, 8),
                   ),
@@ -50,16 +98,13 @@ class ChildDashboardScreen extends ConsumerWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
                           color: Colors.white.withAlpha((0.2 * 255).round()),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
-                          family != null
-                              ? '🏡 ${family.name}'
-                              : '🏡 My Family Space',
+                          family != null ? '🏡 ${family.name}' : '🏡 My Family Space',
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 12,
@@ -69,8 +114,7 @@ class ChildDashboardScreen extends ConsumerWidget {
                       ),
                       Row(
                         children: [
-                          const Icon(Icons.star_rounded,
-                              color: AppTheme.childAccent, size: 22),
+                          const Icon(Icons.star_rounded, color: AppTheme.childAccent, size: 22),
                           const SizedBox(width: 4),
                           Text(
                             '${childState.totalPoints} XP',
@@ -107,12 +151,9 @@ class ChildDashboardScreen extends ConsumerWidget {
                     child: LinearProgressIndicator(
                       value: childState.missions.isEmpty
                           ? 0
-                          : childState.completedMissionsCount /
-                              childState.missions.length,
-                      backgroundColor:
-                          Colors.white.withAlpha((0.3 * 255).round()),
-                      valueColor: const AlwaysStoppedAnimation<Color>(
-                          AppTheme.childAccent),
+                          : childState.completedMissionsCount / childState.missions.length,
+                      backgroundColor: Colors.white.withAlpha((0.3 * 255).round()),
+                      valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.childAccent),
                       minHeight: 10,
                     ),
                   ),
@@ -121,6 +162,185 @@ class ChildDashboardScreen extends ConsumerWidget {
             ),
 
             const SizedBox(height: 24),
+
+            // Today's Local Usage & Focus Metrics Row
+            Row(
+              children: [
+                Expanded(
+                  child: _buildMetricTile(
+                    icon: Icons.timer_rounded,
+                    title: 'Total Screen',
+                    value: usage.formattedTotalTime,
+                    subtitle: usage.changePercentageFromYesterday < 0
+                        ? '${usage.changePercentageFromYesterday}% vs yest'
+                        : 'Balanced',
+                    color: AppTheme.childPrimary,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildMetricTile(
+                    icon: Icons.bolt_rounded,
+                    title: 'Focus Time',
+                    value: usage.formattedFocusTime,
+                    subtitle: 'Great learning!',
+                    color: AppTheme.childSecondary,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildMetricTile(
+                    icon: Icons.self_improvement_rounded,
+                    title: 'Mindful Breaks',
+                    value: '${usage.breakCount}',
+                    subtitle: 'Pauses taken',
+                    color: AppTheme.warningOrange,
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 20),
+
+            // Category Breakdown Card
+            if (usage.categories.isNotEmpty) ...[
+              Container(
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: AppTheme.neutralBorder),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'App Activity Breakdown',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: AppTheme.childTextDark,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    ...usage.categories.map((cat) {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 6.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  cat.category,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                                Text(
+                                  '${cat.totalMinutes}m (${cat.percentage.toStringAsFixed(0)}%)',
+                                  style: const TextStyle(
+                                    color: AppTheme.neutralMuted,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(6),
+                              child: LinearProgressIndicator(
+                                value: (cat.percentage / 100).clamp(0.0, 1.0),
+                                backgroundColor: AppTheme.neutralBg,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  _getCategoryColor(cat.category),
+                                ),
+                                minHeight: 6,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+            ],
+
+            // Daily Reflection Prompt / Card
+            Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: AppTheme.neutralBorder),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppTheme.childSecondary.withAlpha((0.15 * 255).round()),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Text(
+                      reflection?.mood.emoji ?? '🌟',
+                      style: const TextStyle(fontSize: 24),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          reflection != null
+                              ? 'Today felt ${reflection.mood.label}!'
+                              : 'How did your screen time feel today?',
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          reflection?.notes ?? 'Tap to record your daily mindful check-in.',
+                          style: const TextStyle(fontSize: 12, color: AppTheme.neutralMuted),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      showDialog(
+                        context: context,
+                        builder: (ctx) => ChildReflectionDialog(
+                          existingReflection: reflection,
+                          onSave: (data) {
+                            ref
+                                .read(childDashboardControllerProvider.notifier)
+                                .saveReflection(mood: data.mood, notes: data.notes);
+                          },
+                          onDelete: () {
+                            ref
+                                .read(childDashboardControllerProvider.notifier)
+                                .deleteTodayReflection();
+                          },
+                        ),
+                      );
+                    },
+                    child: Text(reflection != null ? 'Edit' : 'Reflect'),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 24),
+
+            // Today's Missions Header & List
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -139,8 +359,8 @@ class ChildDashboardScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 8),
 
-            ...childState.missions.take(2).map((mission) {
-              final isDone = mission['isCompleted'] as bool;
+            ...childState.missions.take(3).map((mission) {
+              final isDone = mission.isCompleted;
               return Card(
                 child: ListTile(
                   leading: IconButton(
@@ -148,35 +368,31 @@ class ChildDashboardScreen extends ConsumerWidget {
                       isDone
                           ? Icons.check_circle_rounded
                           : Icons.radio_button_unchecked_rounded,
-                      color: isDone
-                          ? AppTheme.childSecondary
-                          : AppTheme.neutralMuted,
+                      color: isDone ? AppTheme.childSecondary : AppTheme.neutralMuted,
                       size: 28,
                     ),
                     onPressed: () {
                       ref
                           .read(childDashboardControllerProvider.notifier)
-                          .toggleMission(mission['id'] as String);
+                          .toggleMission(mission.id);
                     },
                   ),
                   title: Text(
-                    mission['title'] as String,
+                    mission.title,
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       decoration: isDone ? TextDecoration.lineThrough : null,
                     ),
                   ),
-                  subtitle: Text(mission['description'] as String),
+                  subtitle: Text(mission.description),
                   trailing: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color:
-                          AppTheme.childAccent.withAlpha((0.15 * 255).round()),
+                      color: AppTheme.childAccent.withAlpha((0.15 * 255).round()),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
-                      '+${mission["points"]} XP',
+                      '+${mission.points} XP',
                       style: const TextStyle(
                         color: AppTheme.warningOrange,
                         fontWeight: FontWeight.bold,
@@ -189,52 +405,20 @@ class ChildDashboardScreen extends ConsumerWidget {
             }),
 
             const SizedBox(height: 24),
-            Text(
-              'Your Mindful Habits',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.childTextDark,
-                  ),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildHabitCard(
-                    icon: Icons.wb_sunny_rounded,
-                    title: 'Outdoor Time',
-                    subtitle: 'Balanced play',
-                    color: AppTheme.childAccent,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _buildHabitCard(
-                    icon: Icons.nightlight_round,
-                    title: 'Sweet Dreams',
-                    subtitle: 'Gentle rest',
-                    color: AppTheme.childPrimary,
-                  ),
-                ),
-              ],
-            ),
 
-            const SizedBox(height: 24),
-            // Privacy Assurance
+            // Privacy Guarantee
             Card(
               color: Colors.white,
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Row(
                   children: const [
-                    Icon(Icons.lock_rounded,
-                        color: AppTheme.childSecondary, size: 24),
+                    Icon(Icons.lock_rounded, color: AppTheme.childSecondary, size: 24),
                     SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        'ClearTime is your personal companion. Your private chats, browsing, and media remain strictly yours.',
-                        style: TextStyle(
-                            fontSize: 12.5, color: AppTheme.neutralMuted),
+                        '100% On-Device Privacy: Your raw app usage, chats, and reflections NEVER leave your phone.',
+                        style: TextStyle(fontSize: 12.5, color: AppTheme.neutralMuted),
                       ),
                     ),
                   ],
@@ -247,14 +431,15 @@ class ChildDashboardScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildHabitCard({
+  Widget _buildMetricTile({
     required IconData icon,
     required String title,
+    required String value,
     required String subtitle,
     required Color color,
   }) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -263,19 +448,35 @@ class ChildDashboardScreen extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: color, size: 28),
-          const SizedBox(height: 10),
+          Icon(icon, color: color, size: 24),
+          const SizedBox(height: 8),
           Text(
-            title,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+            value,
+            style: const TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: 16,
+              color: AppTheme.childTextDark,
+            ),
           ),
           const SizedBox(height: 2),
           Text(
-            subtitle,
-            style: const TextStyle(color: AppTheme.neutralMuted, fontSize: 12),
+            title,
+            style: const TextStyle(color: AppTheme.neutralMuted, fontSize: 11),
           ),
         ],
       ),
     );
+  }
+
+  Color _getCategoryColor(String category) {
+    final lower = category.toLowerCase();
+    if (lower.contains('learn') || lower.contains('educat')) {
+      return AppTheme.childPrimary;
+    } else if (lower.contains('creativ') || lower.contains('art')) {
+      return AppTheme.childSecondary;
+    } else if (lower.contains('game') || lower.contains('play')) {
+      return AppTheme.childAccent;
+    }
+    return AppTheme.neutralMuted;
   }
 }

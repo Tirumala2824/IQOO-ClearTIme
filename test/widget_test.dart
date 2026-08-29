@@ -17,7 +17,12 @@ import 'package:cleartime/data/models/notification_pref_model.dart';
 import 'package:cleartime/data/models/privacy_setting_model.dart';
 import 'package:cleartime/features/authentication/screens/login_screen.dart';
 import 'package:cleartime/features/child/screens/child_dashboard_screen.dart';
+import 'package:cleartime/features/child/screens/child_missions_screen.dart';
+import 'package:cleartime/features/child/screens/child_goals_screen.dart';
+import 'package:cleartime/features/child/screens/child_progress_screen.dart';
+import 'package:cleartime/features/child/screens/child_ai_screen.dart';
 import 'package:cleartime/features/onboarding/screens/onboarding_screen.dart';
+import 'package:cleartime/services/usage/demo_usage_data_provider.dart';
 
 class FakeAuthRepository implements AuthRepository {
   final UserProfile? _profile;
@@ -245,7 +250,6 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // Verify branding and titles
       expect(find.text('ClearTime'), findsOneWidget);
       expect(
           find.text('Digital wellbeing designed for families'), findsOneWidget);
@@ -288,7 +292,7 @@ void main() {
     });
 
     testWidgets(
-        'ChildDashboardScreen renders positive wellbeing quests and points',
+        'ChildDashboardScreen renders positive wellbeing quests, points, and metrics',
         (WidgetTester tester) async {
       final fakeChild = UserProfile(
         id: 'child-123',
@@ -306,6 +310,7 @@ void main() {
             familyRepositoryProvider.overrideWithValue(FakeFamilyRepository()),
             configurationRepositoryProvider
                 .overrideWithValue(FakeConfigurationRepository()),
+            usageDataProvider.overrideWithValue(DemoUsageDataProvider()),
           ],
           child: const MaterialApp(
             home: ChildDashboardScreen(),
@@ -317,7 +322,73 @@ void main() {
       expect(find.textContaining('Explorer'), findsOneWidget);
       expect(find.text('Mindful Hero Level 1'), findsOneWidget);
       expect(find.text('Today’s Wellbeing Quests'), findsOneWidget);
-      expect(find.text('Your Mindful Habits'), findsOneWidget);
+      expect(find.text('Total Screen'), findsOneWidget);
+      expect(find.text('Focus Time'), findsOneWidget);
+    });
+
+    testWidgets('ChildMissionsScreen renders quest list and category badges',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(
+        const ProviderScope(
+          child: MaterialApp(
+            home: ChildMissionsScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Daily Wellbeing Quests 🎯'), findsOneWidget);
+      expect(find.text('20-Minute Focus Quest'), findsOneWidget);
+      expect(find.text('Study Sprint'), findsOneWidget);
+    });
+
+    testWidgets('ChildGoalsScreen renders goals and summary tiles',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(
+        const ProviderScope(
+          child: MaterialApp(
+            home: ChildGoalsScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('My Wellbeing Goals 🎯'), findsOneWidget);
+      expect(find.text('Total Goals'), findsOneWidget);
+      expect(find.text('Daily Focus Goal'), findsOneWidget);
+    });
+
+    testWidgets('ChildProgressScreen renders badges and XP',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(
+        const ProviderScope(
+          child: MaterialApp(
+            home: ChildProgressScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('My Wellbeing Badges 🏆'), findsOneWidget);
+      expect(find.text('Focus Starter'), findsOneWidget);
+      expect(find.text('Break Master'), findsOneWidget);
+    });
+
+    testWidgets('ChildAiScreen renders offline buddy chat with prompt chips',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(
+        const ProviderScope(
+          child: MaterialApp(
+            home: ChildAiScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('My Wellbeing Buddy 🤖'), findsOneWidget);
+      expect(find.text('100% Offline AI'), findsOneWidget);
+      expect(find.text('How did I do today?'), findsOneWidget);
+      expect(find.text('Help me focus.'), findsOneWidget);
     });
   });
 }
