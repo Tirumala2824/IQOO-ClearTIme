@@ -1,3 +1,4 @@
+import 'package:uuid/uuid.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/errors/app_exceptions.dart';
 import '../../core/security/secure_token_generator.dart';
@@ -47,53 +48,88 @@ class SupabaseFamilyRepository implements FamilyRepository {
     required String name,
     required String adminUserId,
   }) async {
+    final currentUid = _client.auth.currentUser?.id ?? adminUserId;
+
+    // Fast path: Atomic database RPC
     try {
-      // 1. Create family
+      final rpcRes = await _client.rpc(
+        'create_family_hub',
+        params: {'p_name': name},
+      );
+      if (rpcRes != null && rpcRes is Map<String, dynamic>) {
+        return Family.fromJson(rpcRes);
+      }
+    } catch (_) {
+      // Direct table fallback
+    }
+
+    final familyId = const Uuid().v4();
+    final nowIso = DateTime.now().toIso8601String();
+
+    try {
+      // Step 1: Insert family record
+      await _client.from('families').insert({
+        'id': familyId,
+        'name': name,
+        'admin_user_id': currentUid,
+        'created_at': nowIso,
+        'updated_at': nowIso,
+      });
+
+      // Step 2: Add creator as ADMIN in family_members
+      await _client.from('family_members').upsert({
+        'family_id': familyId,
+        'user_id': currentUid,
+        'role': 'ADMIN',
+        'joined_at': nowIso,
+      }, onConflict: 'family_id, user_id');
+
+      // Step 3: Ensure default privacy and notification settings
+      try {
+        await _client.from('privacy_settings').upsert({
+          'family_id': familyId,
+          'user_id': currentUid,
+          'anonymize_data': true,
+          'local_processing_only': true,
+          'data_retention_days': 30,
+          'updated_at': nowIso,
+        }, onConflict: 'family_id, user_id');
+      } catch (_) {}
+
+      try {
+        await _client.from('notification_preferences').upsert({
+          'family_id': familyId,
+          'user_id': currentUid,
+          'daily_summary': true,
+          'instant_alerts': true,
+          'quiet_hours_start': '21:00',
+          'quiet_hours_end': '07:00',
+          'updated_at': nowIso,
+        }, onConflict: 'family_id, user_id');
+      } catch (_) {}
+
+      // Step 4: Fetch verified family object
       final familyRes = await _client
           .from('families')
-          .insert({
-            'name': name,
-            'admin_user_id': adminUserId,
-            'created_at': DateTime.now().toIso8601String(),
-            'updated_at': DateTime.now().toIso8601String(),
-          })
           .select()
-          .single();
+          .eq('id', familyId)
+          .maybeSingle();
 
-      final family = Family.fromJson(familyRes);
+      if (familyRes != null) {
+        return Family.fromJson(familyRes);
+      }
 
-      // 2. Add creator as ADMIN in family_members
-      await _client.from('family_members').insert({
-        'family_id': family.id,
-        'user_id': adminUserId,
-        'role': 'ADMIN',
-        'joined_at': DateTime.now().toIso8601String(),
-      });
-
-      // 3. Ensure default privacy and notification settings
-      await _client.from('privacy_settings').upsert({
-        'family_id': family.id,
-        'user_id': adminUserId,
-        'anonymize_data': true,
-        'local_processing_only': true,
-        'data_retention_days': 30,
-        'updated_at': DateTime.now().toIso8601String(),
-      });
-
-      await _client.from('notification_preferences').upsert({
-        'family_id': family.id,
-        'user_id': adminUserId,
-        'daily_summary': true,
-        'instant_alerts': true,
-        'quiet_hours_start': '21:00',
-        'quiet_hours_end': '07:00',
-        'updated_at': DateTime.now().toIso8601String(),
-      });
-
-      return family;
+      return Family(
+        id: familyId,
+        name: name,
+        adminUserId: currentUid,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
     } on PostgrestException catch (e) {
       throw AppDatabaseException('Failed to create family: ${e.message}');
     } catch (e) {
+      if (e is AppException) rethrow;
       throw AppDatabaseException('Unexpected error creating family: $e');
     }
   }

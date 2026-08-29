@@ -223,6 +223,9 @@ CREATE OR REPLACE FUNCTION public.is_family_admin(f_id UUID)
 RETURNS BOOLEAN AS $$
 BEGIN
     RETURN EXISTS (
+        SELECT 1 FROM public.families
+        WHERE id = f_id AND admin_user_id = auth.uid()
+    ) OR EXISTS (
         SELECT 1 FROM public.family_members
         WHERE family_id = f_id AND user_id = auth.uid() AND role = 'ADMIN'
     );
@@ -233,6 +236,9 @@ CREATE OR REPLACE FUNCTION public.is_family_member(f_id UUID)
 RETURNS BOOLEAN AS $$
 BEGIN
     RETURN EXISTS (
+        SELECT 1 FROM public.families
+        WHERE id = f_id AND admin_user_id = auth.uid()
+    ) OR EXISTS (
         SELECT 1 FROM public.family_members
         WHERE family_id = f_id AND user_id = auth.uid()
     );
@@ -275,9 +281,9 @@ CREATE POLICY "Parents can manage their own profile"
     USING (user_id = auth.uid());
 
 -- 3.3 Families RLS
-CREATE POLICY "Family members can view their family"
+CREATE POLICY "Family members and admin can view their family"
     ON public.families FOR SELECT
-    USING (public.is_family_member(id));
+    USING (admin_user_id = auth.uid() OR public.is_family_member(id));
 
 CREATE POLICY "Parents can create a family"
     ON public.families FOR INSERT
@@ -285,7 +291,7 @@ CREATE POLICY "Parents can create a family"
 
 CREATE POLICY "Admins can update their family"
     ON public.families FOR UPDATE
-    USING (admin_user_id = auth.uid());
+    USING (admin_user_id = auth.uid() OR public.is_family_admin(id));
 
 -- 3.4 Family Members RLS
 CREATE POLICY "Family members can view members of the same family"

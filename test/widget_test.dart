@@ -20,7 +20,7 @@ import 'package:cleartime/features/child/screens/child_dashboard_screen.dart';
 import 'package:cleartime/features/onboarding/screens/onboarding_screen.dart';
 
 class FakeAuthRepository implements AuthRepository {
-  UserProfile? _profile;
+  final UserProfile? _profile;
 
   FakeAuthRepository([this._profile]);
 
