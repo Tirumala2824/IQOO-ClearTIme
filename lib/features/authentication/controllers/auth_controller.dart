@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState;
 import '../../../core/providers/providers.dart';
 import '../../../data/models/user_profile_model.dart';
 import '../../../data/repositories/auth_repository.dart';
@@ -45,9 +47,42 @@ class AuthState {
 
 class AuthController extends StateNotifier<AuthState> {
   final AuthRepository _authRepository;
+  StreamSubscription<dynamic>? _authSubscription;
 
   AuthController(this._authRepository) : super(const AuthState()) {
     _initialize();
+    _listenToAuthChanges();
+  }
+
+  void _listenToAuthChanges() {
+    _authSubscription = _authRepository.authStateChanges.listen((data) async {
+      final session = data.session;
+      if (session != null &&
+          (data.event == AuthChangeEvent.signedIn ||
+              data.event == AuthChangeEvent.tokenRefreshed)) {
+        var profile = await _authRepository.getCurrentUserProfile();
+        final user = session.user;
+        if (profile == null) {
+          final email = user.email;
+          final name = user.userMetadata?['full_name'] as String? ??
+              user.userMetadata?['name'] as String? ??
+              email?.split('@').first;
+          profile = await _authRepository.registerProfile(
+            userId: user.id,
+            role: state.selectedRole,
+            email: email,
+            displayName: name,
+          );
+        }
+        state = state.copyWith(user: profile, isLoading: false);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _authSubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> _initialize() async {

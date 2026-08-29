@@ -64,6 +64,7 @@ class SupabaseAuthRepository implements AuthRepository {
       await _client.auth.signInWithOAuth(
         OAuthProvider.google,
         redirectTo: 'cleartime://auth-callback',
+        authScreenLaunchMode: LaunchMode.externalApplication,
       );
     } on AuthException catch (e) {
       throw AppAuthException(e.message, code: e.statusCode);
