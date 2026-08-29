@@ -1,12 +1,99 @@
 enum MissionStatus {
-  available,
+  assigned,
   started,
-  inProgress,
-  completed,
-  expired,
+  submitted,
+  approved,
+  needsRetry,
+  expired;
+
+  String get label {
+    switch (this) {
+      case MissionStatus.assigned:
+        return 'Assigned';
+      case MissionStatus.started:
+        return 'In Progress';
+      case MissionStatus.submitted:
+        return 'Submitted';
+      case MissionStatus.approved:
+        return 'Approved';
+      case MissionStatus.needsRetry:
+        return 'Needs Retry';
+      case MissionStatus.expired:
+        return 'Expired';
+    }
+  }
+
+  static MissionStatus fromString(String? name) {
+    if (name == null) return MissionStatus.assigned;
+    if (name == 'available') return MissionStatus.assigned;
+    if (name == 'inProgress') return MissionStatus.started;
+    if (name == 'completed') return MissionStatus.approved;
+    if (name == 'needs_retry') return MissionStatus.needsRetry;
+    return MissionStatus.values.firstWhere(
+      (s) => s.name == name,
+      orElse: () => MissionStatus.assigned,
+    );
+  }
+}
+
+enum ProofRequirement {
+  noProof,
+  photo,
+  video,
+  parentApproval,
+  photoVideoParentApproval;
+
+  String get label {
+    switch (this) {
+      case ProofRequirement.noProof:
+        return 'No proof';
+      case ProofRequirement.photo:
+        return 'Photo';
+      case ProofRequirement.video:
+        return 'Short video';
+      case ProofRequirement.parentApproval:
+        return 'Parent approval';
+      case ProofRequirement.photoVideoParentApproval:
+        return 'Photo/video + parent approval';
+    }
+  }
+
+  static ProofRequirement fromString(String? name) {
+    if (name == null) return ProofRequirement.noProof;
+    if (name == 'no_proof') return ProofRequirement.noProof;
+    if (name == 'parent_approval') return ProofRequirement.parentApproval;
+    if (name == 'photo_video_parent_approval') {
+      return ProofRequirement.photoVideoParentApproval;
+    }
+    return ProofRequirement.values.firstWhere(
+      (p) => p.name == name,
+      orElse: () => ProofRequirement.noProof,
+    );
+  }
+}
+
+class TaskCategory {
+  static const String outdoor = 'Outdoor';
+  static const String family = 'Family';
+  static const String exercise = 'Exercise';
+  static const String learning = 'Learning';
+  static const String creativity = 'Creativity';
+  static const String responsibility = 'Responsibility';
+  static const String screenFree = 'Screen-free';
+
+  static const List<String> all = [
+    outdoor,
+    family,
+    exercise,
+    learning,
+    creativity,
+    responsibility,
+    screenFree,
+  ];
 }
 
 enum MissionType {
+  parentAssigned,
   focus,
   breakMission,
   reading,
@@ -23,24 +110,71 @@ class ChildMission {
   final int currentMinutes;
   final int points;
   final MissionStatus status;
+  final String? reward;
+  final DateTime? dueDate;
+  final ProofRequirement proofRequirement;
+  final String? proofMediaPath;
+  final String? proofMediaType;
+  final String? submissionNotes;
+  final String? parentFeedback;
+  final String? assignedByParentId;
+  final String? assignedToChildId;
+  final String? assignedToChildNickname;
+  final DateTime createdAt;
   final DateTime? startedAt;
+  final DateTime? submittedAt;
+  final DateTime? approvedAt;
   final DateTime? completedAt;
 
-  const ChildMission({
+  ChildMission({
     required this.id,
     required this.title,
     required this.description,
     required this.category,
-    required this.type,
+    this.type = MissionType.parentAssigned,
     required this.targetMinutes,
     this.currentMinutes = 0,
-    required this.points,
-    this.status = MissionStatus.available,
+    this.points = 50,
+    this.status = MissionStatus.assigned,
+    this.reward,
+    this.dueDate,
+    this.proofRequirement = ProofRequirement.noProof,
+    this.proofMediaPath,
+    this.proofMediaType,
+    this.submissionNotes,
+    this.parentFeedback,
+    this.assignedByParentId,
+    this.assignedToChildId,
+    this.assignedToChildNickname,
+    DateTime? createdAt,
     this.startedAt,
+    this.submittedAt,
+    this.approvedAt,
     this.completedAt,
-  });
+  }) : createdAt = createdAt ?? DateTime.now();
 
-  bool get isCompleted => status == MissionStatus.completed;
+  bool get isCompleted => status == MissionStatus.approved;
+  bool get isPendingApproval => status == MissionStatus.submitted;
+  bool get isNeedsRetry => status == MissionStatus.needsRetry;
+  bool get isStarted => status == MissionStatus.started;
+  bool get isAssigned => status == MissionStatus.assigned;
+  
+  bool get isExpired {
+    if (status == MissionStatus.expired) return true;
+    if (dueDate != null && DateTime.now().isAfter(dueDate!) && !isCompleted) {
+      return true;
+    }
+    return false;
+  }
+
+  bool get requiresMediaProof =>
+      proofRequirement == ProofRequirement.photo ||
+      proofRequirement == ProofRequirement.video ||
+      proofRequirement == ProofRequirement.photoVideoParentApproval;
+
+  bool get requiresParentApproval =>
+      proofRequirement == ProofRequirement.parentApproval ||
+      proofRequirement == ProofRequirement.photoVideoParentApproval;
 
   double get progressRatio => targetMinutes > 0
       ? (currentMinutes / targetMinutes).clamp(0.0, 1.0)
@@ -56,7 +190,20 @@ class ChildMission {
     int? currentMinutes,
     int? points,
     MissionStatus? status,
+    String? reward,
+    DateTime? dueDate,
+    ProofRequirement? proofRequirement,
+    String? proofMediaPath,
+    String? proofMediaType,
+    String? submissionNotes,
+    String? parentFeedback,
+    String? assignedByParentId,
+    String? assignedToChildId,
+    String? assignedToChildNickname,
+    DateTime? createdAt,
     DateTime? startedAt,
+    DateTime? submittedAt,
+    DateTime? approvedAt,
     DateTime? completedAt,
   }) {
     return ChildMission(
@@ -69,7 +216,21 @@ class ChildMission {
       currentMinutes: currentMinutes ?? this.currentMinutes,
       points: points ?? this.points,
       status: status ?? this.status,
+      reward: reward ?? this.reward,
+      dueDate: dueDate ?? this.dueDate,
+      proofRequirement: proofRequirement ?? this.proofRequirement,
+      proofMediaPath: proofMediaPath ?? this.proofMediaPath,
+      proofMediaType: proofMediaType ?? this.proofMediaType,
+      submissionNotes: submissionNotes ?? this.submissionNotes,
+      parentFeedback: parentFeedback ?? this.parentFeedback,
+      assignedByParentId: assignedByParentId ?? this.assignedByParentId,
+      assignedToChildId: assignedToChildId ?? this.assignedToChildId,
+      assignedToChildNickname:
+          assignedToChildNickname ?? this.assignedToChildNickname,
+      createdAt: createdAt ?? this.createdAt,
       startedAt: startedAt ?? this.startedAt,
+      submittedAt: submittedAt ?? this.submittedAt,
+      approvedAt: approvedAt ?? this.approvedAt,
       completedAt: completedAt ?? this.completedAt,
     );
   }
@@ -84,7 +245,20 @@ class ChildMission {
         'currentMinutes': currentMinutes,
         'points': points,
         'status': status.name,
+        'reward': reward,
+        'dueDate': dueDate?.toIso8601String(),
+        'proofRequirement': proofRequirement.name,
+        'proofMediaPath': proofMediaPath,
+        'proofMediaType': proofMediaType,
+        'submissionNotes': submissionNotes,
+        'parentFeedback': parentFeedback,
+        'assignedByParentId': assignedByParentId,
+        'assignedToChildId': assignedToChildId,
+        'assignedToChildNickname': assignedToChildNickname,
+        'createdAt': createdAt.toIso8601String(),
         'startedAt': startedAt?.toIso8601String(),
+        'submittedAt': submittedAt?.toIso8601String(),
+        'approvedAt': approvedAt?.toIso8601String(),
         'completedAt': completedAt?.toIso8601String(),
       };
 
@@ -95,17 +269,36 @@ class ChildMission {
         category: json['category'] as String,
         type: MissionType.values.firstWhere(
           (t) => t.name == json['type'],
-          orElse: () => MissionType.focus,
+          orElse: () => MissionType.parentAssigned,
         ),
         targetMinutes: (json['targetMinutes'] as num).toInt(),
         currentMinutes: (json['currentMinutes'] as num? ?? 0).toInt(),
-        points: (json['points'] as num).toInt(),
-        status: MissionStatus.values.firstWhere(
-          (s) => s.name == json['status'],
-          orElse: () => MissionStatus.available,
-        ),
+        points: (json['points'] as num? ?? 50).toInt(),
+        status: MissionStatus.fromString(json['status'] as String?),
+        reward: json['reward'] as String?,
+        dueDate: json['dueDate'] != null
+            ? DateTime.parse(json['dueDate'] as String)
+            : null,
+        proofRequirement:
+            ProofRequirement.fromString(json['proofRequirement'] as String?),
+        proofMediaPath: json['proofMediaPath'] as String?,
+        proofMediaType: json['proofMediaType'] as String?,
+        submissionNotes: json['submissionNotes'] as String?,
+        parentFeedback: json['parentFeedback'] as String?,
+        assignedByParentId: json['assignedByParentId'] as String?,
+        assignedToChildId: json['assignedToChildId'] as String?,
+        assignedToChildNickname: json['assignedToChildNickname'] as String?,
+        createdAt: json['createdAt'] != null
+            ? DateTime.parse(json['createdAt'] as String)
+            : DateTime.now(),
         startedAt: json['startedAt'] != null
             ? DateTime.parse(json['startedAt'] as String)
+            : null,
+        submittedAt: json['submittedAt'] != null
+            ? DateTime.parse(json['submittedAt'] as String)
+            : null,
+        approvedAt: json['approvedAt'] != null
+            ? DateTime.parse(json['approvedAt'] as String)
             : null,
         completedAt: json['completedAt'] != null
             ? DateTime.parse(json['completedAt'] as String)

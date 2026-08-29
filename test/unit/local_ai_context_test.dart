@@ -26,7 +26,7 @@ void main() {
       );
 
       final missions = [
-        const ChildMission(
+        ChildMission(
           id: 'm-1',
           title: 'Math Quest',
           description: 'Study 20 min',
@@ -34,7 +34,7 @@ void main() {
           type: MissionType.focus,
           targetMinutes: 20,
           points: 50,
-          status: MissionStatus.completed,
+          status: MissionStatus.approved,
         ),
       ];
 

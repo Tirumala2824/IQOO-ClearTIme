@@ -332,13 +332,13 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.textContaining('Explorer'), findsOneWidget);
-      expect(find.text('Mindful Hero Level 1'), findsOneWidget);
-      expect(find.text('Today’s Wellbeing Quests'), findsOneWidget);
-      expect(find.text('Total Screen'), findsOneWidget);
+      expect(find.text("TODAY'S WELLBEING"), findsOneWidget);
+      expect(find.text('Screen Time'), findsOneWidget);
       expect(find.text('Focus Time'), findsOneWidget);
+      expect(find.text('Current Goal 🎯'), findsOneWidget);
     });
 
-    testWidgets('ChildMissionsScreen renders quest list and category badges',
+    testWidgets('ChildMissionsScreen renders missions screen and empty state',
         (WidgetTester tester) async {
       await tester.pumpWidget(
         const ProviderScope(
@@ -349,12 +349,11 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Daily Wellbeing Quests 🎯'), findsOneWidget);
-      expect(find.text('20-Minute Focus Quest'), findsOneWidget);
-      expect(find.text('Study Sprint'), findsOneWidget);
+      expect(find.text('Real-World Missions 🎯'), findsOneWidget);
+      expect(find.text('No missions yet'), findsOneWidget);
     });
 
-    testWidgets('ChildGoalsScreen renders goals and summary tiles',
+    testWidgets('ChildGoalsScreen renders goals and missions section',
         (WidgetTester tester) async {
       await tester.pumpWidget(
         const ProviderScope(
@@ -365,9 +364,9 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('My Wellbeing Goals 🎯'), findsOneWidget);
-      expect(find.text('Total Goals'), findsOneWidget);
-      expect(find.text('Daily Focus Goal'), findsOneWidget);
+      expect(find.text('Goals & Quests 🎯'), findsOneWidget);
+      expect(find.text('Active Focus Goals'), findsOneWidget);
+      expect(find.text('Real-World Offline Missions'), findsOneWidget);
     });
 
     testWidgets('ChildProgressScreen renders badges and XP',
@@ -381,7 +380,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('My Wellbeing Badges 🏆'), findsOneWidget);
+      expect(find.text('My Progress & Badges 🏆'), findsOneWidget);
       expect(find.text('Focus Starter'), findsOneWidget);
       expect(find.text('Break Master'), findsOneWidget);
     });
@@ -638,9 +637,7 @@ void main() {
           ),
         ),
       );
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
-      await tester.pump();
+      await tester.pumpAndSettle();
 
       expect(find.text('Invite Child to Family'), findsOneWidget);
       expect(find.text('Pair Child Device Securely'), findsOneWidget);

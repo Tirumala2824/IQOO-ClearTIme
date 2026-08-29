@@ -7,6 +7,9 @@ import '../../data/models/usage_models.dart';
 /// PRIVACY: Strictly local and in-memory.
 class DemoUsageDataProvider implements UsageDataProvider {
   bool _mockPermissionGranted = true;
+  bool isDynamic;
+
+  DemoUsageDataProvider({this.isDynamic = true});
 
   void setMockPermission(bool granted) {
     _mockPermissionGranted = granted;
@@ -33,6 +36,28 @@ class DemoUsageDataProvider implements UsageDataProvider {
         screenUnlockCount: 0,
         categories: [],
         topApps: [],
+      );
+    }
+
+    if (!isDynamic) {
+      return const UsageSummary(
+        totalMinutes: 170,
+        focusMinutes: 105,
+        breakCount: 5,
+        screenUnlockCount: 14,
+        changePercentageFromYesterday: -14.2,
+        categories: [
+          CategoryUsage(category: 'Education & Learning', totalMinutes: 85, percentage: 50.0, appCount: 2),
+          CategoryUsage(category: 'Creativity & Art', totalMinutes: 40, percentage: 23.5, appCount: 1),
+          CategoryUsage(category: 'Games & Play', totalMinutes: 30, percentage: 17.6, appCount: 2),
+          CategoryUsage(category: 'Utilities', totalMinutes: 15, percentage: 8.8, appCount: 3),
+        ],
+        topApps: [
+          AppUsageSummary(packageName: 'org.khanacademy.android', appName: 'Khan Academy Kids', category: 'Education & Learning', durationMinutes: 55, launchCount: 3),
+          AppUsageSummary(packageName: 'com.duolingo', appName: 'Duolingo', category: 'Education & Learning', durationMinutes: 30, launchCount: 2),
+          AppUsageSummary(packageName: 'com.toca.hair', appName: 'Toca Life World', category: 'Creativity & Art', durationMinutes: 40, launchCount: 2),
+          AppUsageSummary(packageName: 'com.roblox.client', appName: 'Roblox', category: 'Games & Play', durationMinutes: 30, launchCount: 1),
+        ],
       );
     }
 

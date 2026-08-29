@@ -8,19 +8,29 @@ import 'package:cleartime/data/repositories/local_achievement_repository.dart';
 
 void main() {
   group('Missions, Goals, and Achievements On-Device Unit Tests', () {
-    test('LocalMissionRepository progresses and completes missions dynamically', () async {
+    test('LocalMissionRepository starts, progresses, and completes missions dynamically', () async {
       final repo = InMemoryLocalMissionRepository();
+      expect((await repo.getMissions()).isEmpty, isTrue);
+
+      final studyMission = ChildMission(
+        id: 'm-study-sprint',
+        title: 'Study Sprint',
+        description: 'Complete 25 minutes of learning',
+        category: TaskCategory.learning,
+        targetMinutes: 25,
+        points: 60,
+      );
+
+      await repo.saveMission(studyMission);
       final missions = await repo.getMissions();
-      expect(missions.isNotEmpty, isTrue);
+      expect(missions.length, equals(1));
+      expect(missions.first.isCompleted, isFalse);
 
-      final studyMission = missions.firstWhere((m) => m.id == 'm-study-sprint');
-      expect(studyMission.isCompleted, isFalse);
-
-      // Add 10 minutes progress to 25-min mission (was at 15m) -> 25m -> completed
-      await repo.updateMissionProgress('m-study-sprint', 10);
+      // Add 25 minutes progress to 25-min mission -> 25m -> approved/completed
+      await repo.updateMissionProgress('m-study-sprint', 25);
       final updated = await repo.getMissionById('m-study-sprint');
       expect(updated?.isCompleted, isTrue);
-      expect(updated?.status, equals(MissionStatus.completed));
+      expect(updated?.status, equals(MissionStatus.approved));
       expect(updated?.completedAt, isNotNull);
     });
 

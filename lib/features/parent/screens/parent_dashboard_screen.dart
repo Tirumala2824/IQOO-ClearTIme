@@ -5,8 +5,11 @@ import '../../../core/constants/app_routes.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/approved_report_model.dart';
 import '../../../data/models/child_profile_model.dart';
+import '../../../data/models/goal_model.dart';
+import '../../../data/models/mission_model.dart';
 import '../../authentication/controllers/auth_controller.dart';
 import '../controllers/parent_dashboard_controller.dart';
+import 'parent_create_task_dialog.dart';
 
 class ParentDashboardScreen extends ConsumerStatefulWidget {
   const ParentDashboardScreen({super.key});
@@ -25,7 +28,9 @@ class _ParentDashboardScreenState extends ConsumerState<ParentDashboardScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final user = ref.read(authControllerProvider).user;
       if (user != null) {
-        ref.read(parentDashboardControllerProvider.notifier).loadDashboard(user.id);
+        ref
+            .read(parentDashboardControllerProvider.notifier)
+            .loadDashboard(user.id);
       }
     });
   }
@@ -49,6 +54,14 @@ class _ParentDashboardScreenState extends ConsumerState<ParentDashboardScreen> {
           ? children.first
           : const ChildProfile(id: 'child-1', nickname: 'Alex', age: 12),
     );
+
+    final childUsage = parentState.childUsageSummaries[activeChild.id];
+    final childSession = parentState.childCoachingSessions[activeChild.id];
+    final history = parentState.coachingHistory;
+    final aiGoals = parentState.childGoals
+        .where((g) => g.source == GoalSource.aiGenerated && g.status == GoalStatus.active)
+        .toList();
+    final activeAiGoal = aiGoals.isNotEmpty ? aiGoals.first : null;
 
     return Scaffold(
       appBar: AppBar(
@@ -239,6 +252,378 @@ class _ParentDashboardScreenState extends ConsumerState<ParentDashboardScreen> {
                 const SizedBox(height: 20),
               ],
 
+              // ─── LIVE AI COACHING STATUS FOR ACTIVE CHILD ───
+              Container(
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: AppTheme.parentPrimary.withAlpha((0.2 * 255).round()),
+                    width: 1.5,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppTheme.parentPrimary
+                          .withAlpha((0.06 * 255).round()),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            const Text('🤖', style: TextStyle(fontSize: 20)),
+                            const SizedBox(width: 8),
+                            Text(
+                              '${activeChild.nickname}\'s Coaching Loop',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                                color: AppTheme.parentTextDark,
+                              ),
+                            ),
+                          ],
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: AppTheme.successGreen
+                                .withAlpha((0.15 * 255).round()),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.check_circle_rounded,
+                                  size: 13, color: AppTheme.successGreen),
+                              const SizedBox(width: 4),
+                              Text(
+                                '${history.streakDays}d Streak',
+                                style: const TextStyle(
+                                  color: AppTheme.successGreen,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+
+                    if (activeAiGoal != null) ...[
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppTheme.parentSurface,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text(
+                                  'Current AI Goal',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppTheme.parentPrimary,
+                                  ),
+                                ),
+                                Text(
+                                  '${activeAiGoal.currentMinutes}/${activeAiGoal.targetMinutes} min',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppTheme.neutralMuted,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              activeAiGoal.title,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(4),
+                              child: LinearProgressIndicator(
+                                value: activeAiGoal.progressRatio,
+                                backgroundColor: AppTheme.neutralBg,
+                                valueColor: const AlwaysStoppedAnimation<Color>(
+                                    AppTheme.parentPrimary),
+                                minHeight: 6,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ] else ...[
+                      Text(
+                        'Coaching loop active • Goal updates automatically based on screen habits.',
+                        style: TextStyle(fontSize: 12, color: AppTheme.neutralMuted),
+                      ),
+                    ],
+
+                    if (childSession != null && childSession.patterns.isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      Text(
+                        'Latest Habit Observation:',
+                        style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.neutralMuted),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${childSession.patterns.first.emoji} ${childSession.patterns.first.description}',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              // ─── REAL-WORLD OFFLINE MISSIONS SECTION ───
+              Builder(
+                builder: (context) {
+                  final childTasks = parentState.parentTasks
+                      .where((t) => t.assignedToChildId == activeChild.id)
+                      .toList();
+                  final pendingReview = childTasks
+                      .where((t) => t.status == MissionStatus.submitted)
+                      .toList();
+
+                  return Container(
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: pendingReview.isNotEmpty
+                            ? AppTheme.warningOrange
+                            : AppTheme.neutralBorder,
+                        width: pendingReview.isNotEmpty ? 1.5 : 1.0,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withAlpha((0.03 * 255).round()),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                const Text('🎯', style: TextStyle(fontSize: 20)),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Real-World Offline Missions',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 15,
+                                    color: AppTheme.parentTextDark,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (pendingReview.isNotEmpty)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.warningOrange,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text(
+                                  '${pendingReview.length} Pending Review',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+
+                        if (childTasks.isEmpty) ...[
+                          Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: AppTheme.parentSurface,
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.park_outlined,
+                                    color: AppTheme.parentPrimary, size: 24),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    'No offline missions assigned to ${activeChild.nickname} yet. Encourage family time, reading, outdoor play, or exercise!',
+                                    style: const TextStyle(
+                                      fontSize: 12.5,
+                                      color: AppTheme.neutralMuted,
+                                      height: 1.3,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ] else ...[
+                          ...childTasks.take(2).map((task) {
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 8),
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: AppTheme.parentSurface,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: task.status == MissionStatus.submitted
+                                      ? AppTheme.warningOrange.withAlpha((0.5 * 255).round())
+                                      : AppTheme.neutralBorder,
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                  horizontal: 6, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: AppTheme.parentPrimary
+                                                    .withAlpha((0.1 * 255).round()),
+                                                borderRadius: BorderRadius.circular(6),
+                                              ),
+                                              child: Text(
+                                                task.category,
+                                                style: const TextStyle(
+                                                  color: AppTheme.parentPrimary,
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 6),
+                                            Text(
+                                              task.status.label,
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.bold,
+                                                color: task.status == MissionStatus.approved
+                                                    ? AppTheme.successGreen
+                                                    : task.status == MissionStatus.submitted
+                                                        ? AppTheme.warningOrange
+                                                        : AppTheme.neutralMuted,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          task.title,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 13.5,
+                                          ),
+                                        ),
+                                        if (task.reward != null) ...[
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            '🎁 ${task.reward}',
+                                            style: const TextStyle(
+                                              fontSize: 11.5,
+                                              color: AppTheme.warningOrange,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
+                                  Text(
+                                    '${task.targetMinutes}m',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                      color: AppTheme.neutralMuted,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }),
+                        ],
+
+                        const SizedBox(height: 12),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            TextButton.icon(
+                              onPressed: () => context.push(AppRoutes.parentTasks),
+                              icon: const Icon(Icons.arrow_forward_rounded, size: 16),
+                              label: Text('All Missions (${childTasks.length})'),
+                            ),
+                            ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppTheme.parentPrimary,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 8),
+                              ),
+                              onPressed: () {
+                                ParentCreateTaskDialog.show(
+                                  context,
+                                  children: parentState.children,
+                                  initialChildId: activeChild.id,
+                                );
+                              },
+                              icon: const Icon(Icons.add_rounded, size: 16),
+                              label: const Text('Assign Mission'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+
+              const SizedBox(height: 20),
+
               // Approved Insights Section for Selected Child
               Builder(
                 builder: (context) {
@@ -256,17 +641,19 @@ class _ParentDashboardScreenState extends ConsumerState<ParentDashboardScreen> {
                             childNickname: activeChild.nickname,
                             familyId: family?.id ?? 'f1',
                             period: ReportPeriod.weekly,
-                            periodStart: DateTime.now().subtract(const Duration(days: 7)),
+                            periodStart:
+                                DateTime.now().subtract(const Duration(days: 7)),
                             periodEnd: DateTime.now(),
-                            facts: const ReportFacts(
-                              totalScreenMinutes: 720,
-                              focusMinutes: 310,
-                              breakCount: 18,
+                            facts: ReportFacts(
+                              totalScreenMinutes: (childUsage?.totalMinutes ?? 120) * 7,
+                              focusMinutes: (childUsage?.focusMinutes ?? 60) * 7,
+                              breakCount: (childUsage?.breakCount ?? 3) * 7,
                               goalsCompletedCount: 4,
                               goalsTotalCount: 5,
                               changePercentage: -8.5,
                             ),
-                            summaryText: 'Balanced mindful progress recorded this week.',
+                            summaryText:
+                                'Balanced mindful progress recorded this week with active AI coaching guidance.',
                             createdAt: DateTime.now(),
                           ),
                   );
@@ -386,7 +773,9 @@ class _ParentDashboardScreenState extends ConsumerState<ParentDashboardScreen> {
                                   TextButton.icon(
                                     onPressed: () => context.push(
                                         '${AppRoutes.parentAi}?childId=${activeChild.id}&reportId=${latestWeekly.id}'),
-                                    icon: const Icon(Icons.chat_bubble_outline_rounded, size: 16),
+                                    icon: const Icon(
+                                        Icons.chat_bubble_outline_rounded,
+                                        size: 16),
                                     label: const Text('Discuss with AI',
                                         style: TextStyle(fontSize: 12)),
                                   ),
@@ -396,55 +785,6 @@ class _ParentDashboardScreenState extends ConsumerState<ParentDashboardScreen> {
                           ),
                         ),
                       ),
-
-                      if (reports.length > 1) ...[
-                        const SizedBox(height: 16),
-                        Text(
-                          'Recent Approved Reports',
-                          style: Theme.of(context)
-                              .textTheme
-                              .titleSmall
-                              ?.copyWith(fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 8),
-                        ...reports.take(3).map((r) {
-                          return Card(
-                            margin: const EdgeInsets.only(bottom: 8),
-                            child: ListTile(
-                              leading: Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: AppTheme.parentPrimary
-                                      .withAlpha((0.1 * 255).round()),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: const Icon(Icons.description_outlined,
-                                    color: AppTheme.parentPrimary, size: 20),
-                              ),
-                              title: Text(
-                                '${r.period == ReportPeriod.daily ? "Daily" : "Weekly"} Report • ${r.periodStart.month}/${r.periodStart.day}',
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.bold, fontSize: 13),
-                              ),
-                              subtitle: Text(
-                                'Screen: ${r.facts.formattedTotalTime} • Focus: ${r.facts.formattedFocusTime}',
-                                style: const TextStyle(fontSize: 12),
-                              ),
-                              trailing: ElevatedButton(
-                                style: ElevatedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 12, vertical: 8),
-                                  visualDensity: VisualDensity.compact,
-                                ),
-                                onPressed: () =>
-                                    context.go(AppRoutes.parentReports),
-                                child: const Text('View Report',
-                                    style: TextStyle(fontSize: 11)),
-                              ),
-                            ),
-                          );
-                        }),
-                      ],
                     ],
                   );
                 },

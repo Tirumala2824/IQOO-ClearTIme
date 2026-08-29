@@ -12,7 +12,19 @@ class InMemoryLocalReflectionRepository implements LocalReflectionRepository {
   final Map<String, DailyReflection> _reflections = {};
 
   InMemoryLocalReflectionRepository() {
-    // Start empty — reflections are created by the child
+    _initDefaultReflections();
+  }
+
+  void _initDefaultReflections() {
+    final now = DateTime.now();
+    final defaultRef = DailyReflection(
+      id: 'ref-default-1',
+      date: DateTime(now.year, now.month, now.day).subtract(const Duration(days: 1)),
+      mood: ReflectionMood.relaxing,
+      notes: 'Felt calm and enjoyed reading time.',
+      createdAt: now.subtract(const Duration(days: 1)),
+    );
+    _reflections[defaultRef.id] = defaultRef;
   }
 
 

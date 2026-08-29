@@ -66,12 +66,48 @@ class AndroidUsageDataProvider implements UsageDataProvider {
     // Calculate approximate focus minutes from Education & Creativity apps
     final focusMinutes = (catMap['Education'] ?? 0) + (catMap['Creativity'] ?? 0);
 
+    // Calculate real breaks and unlocks from today's timeline
+    final now = DateTime.now();
+    final startOfDay = DateTime(now.year, now.month, now.day, 0, 0, 0);
+    final timeline = await _channel.getTimeline(
+      startOfDay.millisecondsSinceEpoch,
+      now.millisecondsSinceEpoch,
+    );
+
+    int calculatedBreaks = 0;
+    if (timeline.length > 1) {
+      for (int i = 0; i < timeline.length - 1; i++) {
+        final gapMinutes = timeline[i + 1]
+            .startTime
+            .difference(timeline[i].endTime)
+            .inMinutes;
+        if (gapMinutes >= 5) {
+          calculatedBreaks++;
+        }
+      }
+    }
+
+    final unlockCount = timeline.isNotEmpty ? timeline.length : 0;
+
+    // Calculate percentage change compared to yesterday
+    double changePct = 0.0;
+    final yestStart = startOfDay.subtract(const Duration(days: 1));
+    final yestEnd = DateTime(yestStart.year, yestStart.month, yestStart.day, 23, 59, 59);
+    final yestData = await _channel.getUsageRange(
+      yestStart.millisecondsSinceEpoch,
+      yestEnd.millisecondsSinceEpoch,
+    );
+    final yestTotal = (yestData['totalMinutes'] as num? ?? 0).toInt();
+    if (yestTotal > 0 && totalMinutes > 0) {
+      changePct = ((totalMinutes - yestTotal) / yestTotal) * 100.0;
+    }
+
     return UsageSummary(
       totalMinutes: totalMinutes,
       focusMinutes: focusMinutes,
-      breakCount: 3, // Calculated from usage gap intervals
-      screenUnlockCount: 14,
-      changePercentageFromYesterday: -12.5,
+      breakCount: calculatedBreaks,
+      screenUnlockCount: unlockCount,
+      changePercentageFromYesterday: changePct,
       categories: categories,
       topApps: topApps,
     );
@@ -99,7 +135,7 @@ class AndroidUsageDataProvider implements UsageDataProvider {
         date: start,
         totalMinutes: totalMinutes,
         focusMinutes: (catMap['Education'] ?? 0) + (catMap['Creativity'] ?? 0),
-        unlockCount: 12 + i,
+        unlockCount: 0,
         categoryMinutes: catMap,
       ));
     }
@@ -135,27 +171,32 @@ class AndroidUsageDataProvider implements UsageDataProvider {
   @override
   Future<List<FocusSession>> getFocusSessions() async {
     final now = DateTime.now();
-    return [
-      FocusSession(
-        id: 'fs-1',
-        startTime: now.subtract(const Duration(hours: 3)),
-        endTime: now.subtract(const Duration(hours: 2, minutes: 35)),
-        targetMinutes: 25,
-        actualMinutes: 25,
+    final startOfDay = DateTime(now.year, now.month, now.day, 0, 0, 0);
+    final timeline = await _channel.getTimeline(
+      startOfDay.millisecondsSinceEpoch,
+      now.millisecondsSinceEpoch,
+    );
+
+    final focusEntries = timeline.where((t) {
+      final lower = t.category.toLowerCase();
+      return lower.contains('edu') ||
+          lower.contains('learn') ||
+          lower.contains('creat') ||
+          lower.contains('read') ||
+          lower.contains('book');
+    }).toList();
+
+    return focusEntries.map((e) {
+      return FocusSession(
+        id: 'fs-${e.startTime.millisecondsSinceEpoch}',
+        startTime: e.startTime,
+        endTime: e.endTime,
+        targetMinutes: e.durationMinutes,
+        actualMinutes: e.durationMinutes,
         isCompleted: true,
-        title: 'Math & Logic Practice',
-        category: 'Education',
-      ),
-      FocusSession(
-        id: 'fs-2',
-        startTime: now.subtract(const Duration(hours: 1)),
-        endTime: now.subtract(const Duration(minutes: 40)),
-        targetMinutes: 20,
-        actualMinutes: 20,
-        isCompleted: true,
-        title: 'Reading Adventures',
-        category: 'Reading',
-      ),
-    ];
+        title: e.appName,
+        category: e.category,
+      );
+    }).toList();
   }
 }

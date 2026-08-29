@@ -2,201 +2,196 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_routes.dart';
-import '../../../core/providers/providers.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../authentication/controllers/auth_controller.dart';
 import '../controllers/child_dashboard_controller.dart';
 
-class ChildSettingsScreen extends ConsumerWidget {
+class ChildSettingsScreen extends ConsumerStatefulWidget {
   const ChildSettingsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ChildSettingsScreen> createState() =>
+      _ChildSettingsScreenState();
+}
+
+class _ChildSettingsScreenState extends ConsumerState<ChildSettingsScreen> {
+  bool _notificationsEnabled = true;
+
+  @override
+  Widget build(BuildContext context) {
     final childState = ref.watch(childDashboardControllerProvider);
     final profile = childState.profile;
     final family = childState.family;
+    final childName = profile?.nickname ?? 'Explorer';
 
     return Scaffold(
       backgroundColor: AppTheme.childSurface,
       appBar: AppBar(
         backgroundColor: AppTheme.childSurface,
-        title: const Text('My Profile & Settings ⚙️'),
+        elevation: 0,
+        title: const Text(
+          'My Profile & Privacy 👤',
+          style: TextStyle(
+            fontWeight: FontWeight.w800,
+            fontSize: 22,
+            color: AppTheme.childTextDark,
+          ),
+        ),
       ),
       body: ListView(
-        padding: const EdgeInsets.all(20.0),
+        padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
         children: [
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Row(
-                children: [
-                  CircleAvatar(
-                    radius: 28,
-                    backgroundColor:
-                        AppTheme.childPrimary.withAlpha((0.15 * 255).round()),
-                    child: const Icon(
-                      Icons.sentiment_very_satisfied_rounded,
-                      color: AppTheme.childPrimary,
-                      size: 32,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          profile?.nickname ?? 'Explorer',
-                          style: const TextStyle(
-                              fontWeight: FontWeight.bold, fontSize: 18),
+          // ─── 1. PROFILE CARD ───
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: AppTheme.neutralBorder),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withAlpha((0.02 * 255).round()),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 32,
+                  backgroundColor:
+                      AppTheme.childPrimary.withAlpha((0.15 * 255).round()),
+                  child: const Text('🌟', style: TextStyle(fontSize: 32)),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        childName,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 20,
+                          color: AppTheme.childTextDark,
                         ),
-                        const SizedBox(height: 2),
-                        Text(
-                          family?.name != null
-                              ? 'Member of ${family!.name}'
-                              : 'Paired Family',
-                          style: const TextStyle(
-                              color: AppTheme.neutralMuted, fontSize: 13),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        family?.name != null
+                            ? '🏡 Member of ${family!.name}'
+                            : '🏡 My Family Space',
+                        style: const TextStyle(
+                          color: AppTheme.neutralMuted,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 20),
-          Text(
-            'On-Device AI Buddy',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.childTextDark,
-                ),
+
+          const SizedBox(height: 24),
+
+          // ─── 2. PRIVACY & SAFETY PROMISE ───
+          const Text(
+            'Your Privacy Promise 🛡️',
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: 16,
+              color: AppTheme.childTextDark,
+            ),
           ),
           const SizedBox(height: 8),
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.smart_toy_outlined,
-                  color: AppTheme.childSecondary, size: 28),
-              title: const Text(
-                'My Wellbeing Buddy Settings',
-                style: TextStyle(fontWeight: FontWeight.bold),
+
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(
+                color: AppTheme.childSecondary.withAlpha((0.3 * 255).round()),
               ),
-              subtitle: const Text(
-                '100% private, runs offline on this phone with zero cloud AI',
-              ),
-              trailing: const Icon(Icons.arrow_forward_ios_rounded,
-                  size: 14, color: AppTheme.neutralMuted),
-              onTap: () => context.push(AppRoutes.localAiSettings),
+            ),
+            child: Column(
+              children: [
+                _buildPrivacyRow(
+                  icon: Icons.smartphone_rounded,
+                  title: '100% On Your Device',
+                  description:
+                      'Your app names, screen time numbers, and reflections stay on this phone.',
+                ),
+                const Divider(height: 24),
+                _buildPrivacyRow(
+                  icon: Icons.smart_toy_rounded,
+                  title: 'Private AI Coach',
+                  description:
+                      'Your AI Buddy thinks right on your phone without sending chats to the internet.',
+                ),
+                const Divider(height: 24),
+                _buildPrivacyRow(
+                  icon: Icons.lock_outline_rounded,
+                  title: 'Private Reflections',
+                  description:
+                      'How you feel and your daily notes are private to you.',
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 20),
-          Text(
-            'Privacy & Local Storage',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.childTextDark,
-                ),
+
+          const SizedBox(height: 24),
+
+          // ─── 3. PREFERENCES ───
+          const Text(
+            'Preferences ⚙️',
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: 16,
+              color: AppTheme.childTextDark,
+            ),
           ),
           const SizedBox(height: 8),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                children: [
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    secondary: const Icon(Icons.analytics_rounded,
-                        color: AppTheme.childPrimary, size: 28),
-                    title: const Text('Dynamic Demo Mode',
-                        style: TextStyle(fontWeight: FontWeight.bold)),
-                    subtitle: Text(
-                      ref.watch(useDemoDataProvider)
-                          ? 'Using realistic time-varying wellbeing simulator'
-                          : 'Using native Android UsageStatsManager hardware bridge',
-                    ),
-                    value: ref.watch(useDemoDataProvider),
-                    activeThumbColor: AppTheme.childSecondary,
-                    onChanged: (val) {
-                      ref.read(useDemoDataProvider.notifier).state = val;
-                      final userId = childState.profile?.userId ?? '';
-                      ref.read(childDashboardControllerProvider.notifier).loadDashboard(userId);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(val
-                              ? 'Switched to Dynamic Demo Simulator'
-                              : 'Switched to Live Android UsageStats'),
-                          backgroundColor: AppTheme.childSecondary,
-                        ),
-                      );
-                    },
+
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: AppTheme.neutralBorder),
+            ),
+            child: Column(
+              children: [
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  secondary: const Icon(Icons.notifications_active_outlined,
+                      color: AppTheme.childSecondary, size: 26),
+                  title: const Text(
+                    'Gentle Wellbeing Alerts',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                   ),
-                  const Divider(),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.privacy_tip_rounded,
-                        color: AppTheme.childSecondary, size: 28),
-                    title: const Text('Privacy Center 🛡️',
-                        style: TextStyle(fontWeight: FontWeight.bold)),
-                    subtitle: const Text(
-                        'Learn what stays on your phone and what reports are shared.'),
-                    trailing: const Icon(Icons.arrow_forward_ios_rounded,
-                        size: 14, color: AppTheme.neutralMuted),
-                    onTap: () => context.push(AppRoutes.childPrivacyCenter),
+                  subtitle: const Text(
+                    'Friendly reminders to take eye breaks and celebrate completed goals.',
+                    style: TextStyle(fontSize: 12, color: AppTheme.neutralMuted),
                   ),
-                  const Divider(),
-                  const ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: Icon(Icons.shield_outlined,
-                        color: AppTheme.childSecondary),
-                    title: Text('100% On-Device Storage'),
-                    subtitle: Text(
-                        'Your usage records, chats, and reflections are encrypted and stay on this phone.'),
-                  ),
-                  const Divider(),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.auto_delete_outlined,
-                        color: AppTheme.warningOrange),
-                    title: const Text('Auto-Retention Cleanup'),
-                    subtitle: const Text('Local records older than 30 days are automatically deleted.'),
-                    trailing: TextButton(
-                      onPressed: () async {
-                        final count = await ref.read(localUsageStoreProvider).deleteExpiredUsage();
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Retention cleanup complete! $count records pruned.')),
-                          );
-                        }
-                      },
-                      child: const Text('Clean Now'),
-                    ),
-                  ),
-                  const Divider(),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.delete_forever_outlined,
-                        color: AppTheme.alertRed),
-                    title: const Text('Wipe All Local Usage Data'),
-                    subtitle: const Text('Permanently erase all local usage records and reflections.'),
-                    trailing: TextButton(
-                      onPressed: () async {
-                        await ref.read(localUsageStoreProvider).wipeAllLocalData();
-                        await ref.read(localReflectionRepositoryProvider).clearAllReflections();
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('All local usage data wiped successfully.')),
-                          );
-                        }
-                      },
-                      child: const Text('Wipe Data', style: TextStyle(color: AppTheme.alertRed)),
-                    ),
-                  ),
-                ],
-              ),
+                  value: _notificationsEnabled,
+                  activeThumbColor: AppTheme.childSecondary,
+                  onChanged: (val) {
+                    setState(() {
+                      _notificationsEnabled = val;
+                    });
+                  },
+                ),
+              ],
             ),
           ),
+
           const SizedBox(height: 32),
+
+          // ─── 4. SIGN OUT BUTTON ───
           OutlinedButton.icon(
             onPressed: () async {
               await ref.read(authControllerProvider.notifier).signOut();
@@ -206,13 +201,66 @@ class ChildSettingsScreen extends ConsumerWidget {
             },
             icon: const Icon(Icons.logout_rounded, color: AppTheme.errorRed),
             label: const Text('Sign Out',
-                style: TextStyle(color: AppTheme.errorRed)),
+                style: TextStyle(
+                  color: AppTheme.errorRed,
+                  fontWeight: FontWeight.bold,
+                )),
             style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 14),
               side: const BorderSide(color: AppTheme.errorRed),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
             ),
           ),
+          const SizedBox(height: 24),
         ],
       ),
+    );
+  }
+
+  Widget _buildPrivacyRow({
+    required IconData icon,
+    required String title,
+    required String description,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: AppTheme.childSecondary.withAlpha((0.15 * 255).round()),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, color: AppTheme.childSecondary, size: 20),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                  color: AppTheme.childTextDark,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                description,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppTheme.neutralMuted,
+                  height: 1.3,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

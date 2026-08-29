@@ -10,6 +10,7 @@ import '../../features/family/screens/join_family_screen.dart';
 import '../../features/parent/screens/parent_shell_screen.dart';
 import '../../features/parent/screens/parent_dashboard_screen.dart';
 import '../../features/parent/screens/parent_children_screen.dart';
+import '../../features/parent/screens/parent_tasks_screen.dart';
 import '../../features/parent/screens/parent_reports_screen.dart';
 import '../../features/parent/screens/parent_report_compare_screen.dart';
 import '../../features/parent/screens/parent_triggers_screen.dart';
@@ -140,6 +141,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: AppRoutes.parentChildren,
             builder: (context, state) => const ParentChildrenScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.parentTasks,
+            builder: (context, state) => const ParentTasksScreen(),
           ),
           GoRoute(
             path: AppRoutes.parentReports,

@@ -11,6 +11,12 @@ enum GoalStatus {
   completed,
 }
 
+enum GoalSource {
+  aiGenerated,
+  userCreated,
+  parentAssigned,
+}
+
 class ChildGoal {
   final String id;
   final String title;
@@ -19,6 +25,9 @@ class ChildGoal {
   final int targetMinutes; // or target count for breakGoal
   final int currentMinutes; // or current count for breakGoal
   final GoalStatus status;
+  final GoalSource source;
+  final String? evaluationResult; // e.g. "improved", "struggled"
+  final String? relatedPattern; // description of pattern that triggered this goal
   final DateTime createdAt;
   final DateTime? updatedAt;
 
@@ -30,11 +39,15 @@ class ChildGoal {
     required this.targetMinutes,
     this.currentMinutes = 0,
     this.status = GoalStatus.active,
+    this.source = GoalSource.userCreated,
+    this.evaluationResult,
+    this.relatedPattern,
     required this.createdAt,
     this.updatedAt,
   });
 
   bool get isCompleted => currentMinutes >= targetMinutes;
+  bool get isAIGenerated => source == GoalSource.aiGenerated;
 
   double get progressRatio => targetMinutes > 0
       ? (currentMinutes / targetMinutes).clamp(0.0, 1.0)
@@ -50,6 +63,9 @@ class ChildGoal {
     int? targetMinutes,
     int? currentMinutes,
     GoalStatus? status,
+    GoalSource? source,
+    String? evaluationResult,
+    String? relatedPattern,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -61,6 +77,9 @@ class ChildGoal {
       targetMinutes: targetMinutes ?? this.targetMinutes,
       currentMinutes: currentMinutes ?? this.currentMinutes,
       status: status ?? this.status,
+      source: source ?? this.source,
+      evaluationResult: evaluationResult ?? this.evaluationResult,
+      relatedPattern: relatedPattern ?? this.relatedPattern,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -74,6 +93,9 @@ class ChildGoal {
         'targetMinutes': targetMinutes,
         'currentMinutes': currentMinutes,
         'status': status.name,
+        'source': source.name,
+        'evaluationResult': evaluationResult,
+        'relatedPattern': relatedPattern,
         'createdAt': createdAt.toIso8601String(),
         'updatedAt': updatedAt?.toIso8601String(),
       };
@@ -92,6 +114,12 @@ class ChildGoal {
           (s) => s.name == json['status'],
           orElse: () => GoalStatus.active,
         ),
+        source: GoalSource.values.firstWhere(
+          (s) => s.name == (json['source'] as String?),
+          orElse: () => GoalSource.userCreated,
+        ),
+        evaluationResult: json['evaluationResult'] as String?,
+        relatedPattern: json['relatedPattern'] as String?,
         createdAt: DateTime.parse(json['createdAt'] as String),
         updatedAt: json['updatedAt'] != null
             ? DateTime.parse(json['updatedAt'] as String)

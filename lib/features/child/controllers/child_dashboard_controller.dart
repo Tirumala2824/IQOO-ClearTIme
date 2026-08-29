@@ -6,12 +6,14 @@ import '../../../data/models/usage_models.dart';
 import '../../../data/models/mission_model.dart';
 import '../../../data/models/goal_model.dart';
 import '../../../data/models/reflection_model.dart';
+import '../../../data/models/coaching_models.dart';
 import '../../../data/repositories/family_repository.dart';
 import '../../../data/repositories/local_mission_repository.dart';
 import '../../../data/repositories/local_goal_repository.dart';
 import '../../../data/repositories/local_reflection_repository.dart';
 import '../../../core/services/abstractions/usage_data_provider.dart';
 import '../../../core/services/abstractions/notification_provider.dart';
+import '../../../services/coaching/coaching_loop_service.dart';
 
 class ChildDashboardState {
   final ChildProfile? profile;
@@ -21,6 +23,12 @@ class ChildDashboardState {
   final List<ChildMission> missions;
   final List<ChildGoal> goals;
   final DailyReflection? todayReflection;
+  final CoachingSession? coachingSession;
+  final List<DetectedPattern> detectedPatterns;
+  final ChildGoal? activeAIGoal;
+  final CoachingHistory coachingHistory;
+  final bool isCoachingLoopRunning;
+  final CoachingSessionStatus? coachingLoopStep;
   final bool isLoading;
   final String? errorMessage;
 
@@ -39,6 +47,12 @@ class ChildDashboardState {
     this.missions = const [],
     this.goals = const [],
     this.todayReflection,
+    this.coachingSession,
+    this.detectedPatterns = const [],
+    this.activeAIGoal,
+    this.coachingHistory = const CoachingHistory(),
+    this.isCoachingLoopRunning = false,
+    this.coachingLoopStep,
     this.isLoading = false,
     this.errorMessage,
   });
@@ -49,6 +63,15 @@ class ChildDashboardState {
   int get totalPoints => missions
       .where((m) => m.isCompleted)
       .fold(0, (sum, m) => sum + m.points);
+  bool get hasCoachingSession => coachingSession != null;
+  String get patternSummary {
+    final positive = detectedPatterns.where((p) => p.type == PatternType.positive).length;
+    final concerning = detectedPatterns.where((p) => p.type == PatternType.concerning).length;
+    if (positive > 0 && concerning == 0) return 'Looking great today! 🌟';
+    if (concerning > 0 && positive == 0) return 'Some areas to focus on 💪';
+    if (positive > 0 && concerning > 0) return 'Mixed signals — keep improving! 📊';
+    return 'Analyzing your habits...';
+  }
 
   ChildDashboardState copyWith({
     ChildProfile? profile,
@@ -58,10 +81,17 @@ class ChildDashboardState {
     List<ChildMission>? missions,
     List<ChildGoal>? goals,
     DailyReflection? todayReflection,
+    CoachingSession? coachingSession,
+    List<DetectedPattern>? detectedPatterns,
+    ChildGoal? activeAIGoal,
+    CoachingHistory? coachingHistory,
+    bool? isCoachingLoopRunning,
+    CoachingSessionStatus? coachingLoopStep,
     bool? isLoading,
     String? errorMessage,
     bool clearError = false,
     bool clearReflection = false,
+    bool clearAIGoal = false,
   }) {
     return ChildDashboardState(
       profile: profile ?? this.profile,
@@ -73,6 +103,12 @@ class ChildDashboardState {
       todayReflection: clearReflection
           ? null
           : (todayReflection ?? this.todayReflection),
+      coachingSession: coachingSession ?? this.coachingSession,
+      detectedPatterns: detectedPatterns ?? this.detectedPatterns,
+      activeAIGoal: clearAIGoal ? null : (activeAIGoal ?? this.activeAIGoal),
+      coachingHistory: coachingHistory ?? this.coachingHistory,
+      isCoachingLoopRunning: isCoachingLoopRunning ?? this.isCoachingLoopRunning,
+      coachingLoopStep: coachingLoopStep ?? this.coachingLoopStep,
       isLoading: isLoading ?? this.isLoading,
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
     );
@@ -86,6 +122,7 @@ class ChildDashboardController extends StateNotifier<ChildDashboardState> {
   final LocalGoalRepository _goalRepository;
   final LocalReflectionRepository _reflectionRepository;
   final NotificationProvider _notificationProvider;
+  final CoachingLoopService _coachingLoopService;
 
   ChildDashboardController({
     required FamilyRepository familyRepository,
@@ -94,12 +131,14 @@ class ChildDashboardController extends StateNotifier<ChildDashboardState> {
     required LocalGoalRepository goalRepository,
     required LocalReflectionRepository reflectionRepository,
     required NotificationProvider notificationProvider,
+    required CoachingLoopService coachingLoopService,
   })  : _familyRepository = familyRepository,
         _usageDataProvider = usageDataProvider,
         _missionRepository = missionRepository,
         _goalRepository = goalRepository,
         _reflectionRepository = reflectionRepository,
         _notificationProvider = notificationProvider,
+        _coachingLoopService = coachingLoopService,
         super(const ChildDashboardState());
 
   Future<void> loadDashboard(String userId) async {
@@ -116,6 +155,16 @@ class ChildDashboardController extends StateNotifier<ChildDashboardState> {
       final missions = await _missionRepository.getMissions();
       final goals = await _goalRepository.getGoals();
       final reflection = await _reflectionRepository.getTodayReflection();
+      final activeAIGoal = await _goalRepository.getActiveAIGoal();
+
+      // Sync goal progress with actual usage data
+      await _syncGoalProgressWithUsage(usageSummary, goals);
+      final updatedGoals = await _goalRepository.getGoals();
+
+      // Load coaching history
+      final history = _coachingLoopService.getCoachingHistory();
+      final todaySession = _coachingLoopService.getTodaySession();
+      final patterns = _coachingLoopService.getLatestPatterns();
 
       state = state.copyWith(
         profile: profile,
@@ -123,12 +172,104 @@ class ChildDashboardController extends StateNotifier<ChildDashboardState> {
         hasPermission: hasPermission,
         usageSummary: usageSummary,
         missions: missions,
-        goals: goals,
+        goals: updatedGoals,
         todayReflection: reflection,
+        activeAIGoal: activeAIGoal,
+        coachingSession: todaySession,
+        detectedPatterns: patterns,
+        coachingHistory: history,
         isLoading: false,
       );
+
+      // Auto-run coaching loop if not yet run today
+      if (todaySession == null) {
+        await runCoachingLoop();
+      }
     } catch (e) {
       state = state.copyWith(isLoading: false, errorMessage: e.toString());
+    }
+  }
+
+  /// Syncs all active goals' progress with actual usage data.
+  Future<void> _syncGoalProgressWithUsage(
+    UsageSummary usage,
+    List<ChildGoal> goals,
+  ) async {
+    for (final goal in goals) {
+      if (goal.status != GoalStatus.active) continue;
+
+      int actualValue;
+      switch (goal.type) {
+        case GoalType.dailyFocus:
+          actualValue = usage.focusMinutes;
+          break;
+        case GoalType.breakGoal:
+          actualValue = usage.breakCount;
+          break;
+        case GoalType.digitalBalance:
+          final gamingMin = usage.categories
+              .where((c) => c.category.toLowerCase().contains('game'))
+              .fold<int>(0, (s, c) => s + c.totalMinutes);
+          actualValue = gamingMin <= goal.targetMinutes
+              ? goal.targetMinutes
+              : (goal.targetMinutes - (gamingMin - goal.targetMinutes))
+                  .clamp(0, goal.targetMinutes);
+          break;
+        case GoalType.weeklyFocus:
+          actualValue = usage.focusMinutes;
+          break;
+      }
+
+      await _goalRepository.updateGoalProgress(goal.id, actualValue);
+    }
+  }
+
+  /// Runs the complete coaching loop (auto + manual).
+  Future<void> runCoachingLoop() async {
+    state = state.copyWith(
+      isCoachingLoopRunning: true,
+      coachingLoopStep: CoachingSessionStatus.collecting,
+    );
+
+    try {
+      // Run the real loop
+      final session = await _coachingLoopService.runFullLoop();
+
+      // Also generate dynamic missions based on patterns
+      final updatedMissions = await _missionRepository.generateDynamicMissions(
+        usage: state.usageSummary,
+        patterns: session.patterns,
+      );
+
+      // Reload goals to get the newly generated AI goal
+      final updatedGoals = await _goalRepository.getGoals();
+      final activeAIGoal = await _goalRepository.getActiveAIGoal();
+      final history = _coachingLoopService.getCoachingHistory();
+
+      state = state.copyWith(
+        coachingSession: session,
+        detectedPatterns: session.patterns,
+        missions: updatedMissions,
+        goals: updatedGoals,
+        activeAIGoal: activeAIGoal,
+        coachingHistory: history,
+        isCoachingLoopRunning: false,
+        coachingLoopStep: CoachingSessionStatus.complete,
+      );
+
+      // Send a gentle notification about the new goal
+      if (session.generatedGoal != null) {
+        await _notificationProvider.showChildWellbeingNotification(
+          id: session.generatedGoal!.id.hashCode.abs(),
+          title: 'New Daily Goal! 🎯',
+          body: session.generatedGoal!.title,
+        );
+      }
+    } catch (e) {
+      state = state.copyWith(
+        isCoachingLoopRunning: false,
+        errorMessage: 'Coaching loop error: $e',
+      );
     }
   }
 
@@ -146,7 +287,7 @@ class ChildDashboardController extends StateNotifier<ChildDashboardState> {
     if (mission.isCompleted) {
       await _missionRepository.saveMission(
         mission.copyWith(
-          status: MissionStatus.available,
+          status: MissionStatus.assigned,
           currentMinutes: 0,
         ),
       );
@@ -197,6 +338,7 @@ final childDashboardControllerProvider =
   final goalRepo = ref.watch(localGoalRepositoryProvider);
   final reflectionRepo = ref.watch(localReflectionRepositoryProvider);
   final notifProvider = ref.watch(notificationProvider);
+  final coachingLoop = ref.watch(coachingLoopServiceProvider);
 
   return ChildDashboardController(
     familyRepository: familyRepo,
@@ -205,5 +347,6 @@ final childDashboardControllerProvider =
     goalRepository: goalRepo,
     reflectionRepository: reflectionRepo,
     notificationProvider: notifProvider,
+    coachingLoopService: coachingLoop,
   );
 });

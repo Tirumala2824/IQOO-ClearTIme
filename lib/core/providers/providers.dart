@@ -38,6 +38,9 @@ import '../../services/llm/ai_response_validator.dart';
 import '../../services/llm/deterministic_fallback_service.dart';
 import '../../services/llm/local_model_manager.dart';
 import '../../services/llm/ai_diagnostics_service.dart';
+import '../../services/coaching/pattern_detection_service.dart';
+import '../../services/coaching/coaching_goal_generator.dart';
+import '../../services/coaching/coaching_loop_service.dart';
 
 // --- Phase 1 Repositories ---
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
@@ -59,9 +62,9 @@ final authorizationServiceProvider = Provider<AuthorizationService>((ref) {
 
 // --- Phase 2 Core On-Device Service Providers ---
 
-/// Toggle to switch between real Android platform channel and Demo mock adapter.
-/// Defaults to TRUE for hackathon demo so rich dynamic data is shown.
-final useDemoDataProvider = StateProvider<bool>((ref) => true);
+/// Toggle to switch between real Android platform channel and Demo adapter.
+/// Defaults to FALSE for production real-data usage.
+final useDemoDataProvider = StateProvider<bool>((ref) => false);
 
 final usageDataProvider = Provider<UsageDataProvider>((ref) {
   final useDemo = ref.watch(useDemoDataProvider);
@@ -80,7 +83,7 @@ final localMissionRepositoryProvider = Provider<LocalMissionRepository>((ref) {
 });
 
 final localGoalRepositoryProvider = Provider<LocalGoalRepository>((ref) {
-  return InMemoryLocalGoalRepository();
+  return InMemoryLocalGoalRepository(seedAiHistory: false);
 });
 
 final localAchievementRepositoryProvider =
@@ -249,6 +252,30 @@ final reportSchedulerServiceProvider = Provider<ReportSchedulerService>((ref) {
     analyticsService: analyticsService,
     reportBuilder: reportBuilder,
     reportRepo: reportRepo,
+  );
+});
+
+// --- Phase 6 Coaching Loop Providers ---
+
+final patternDetectionServiceProvider = Provider<PatternDetectionService>((ref) {
+  return const PatternDetectionService();
+});
+
+final coachingGoalGeneratorProvider = Provider<CoachingGoalGenerator>((ref) {
+  return const CoachingGoalGenerator();
+});
+
+final coachingLoopServiceProvider = Provider<CoachingLoopService>((ref) {
+  final usage = ref.watch(usageDataProvider);
+  final patternService = ref.watch(patternDetectionServiceProvider);
+  final goalGenerator = ref.watch(coachingGoalGeneratorProvider);
+  final goalRepo = ref.watch(localGoalRepositoryProvider);
+
+  return CoachingLoopService(
+    usageProvider: usage,
+    patternService: patternService,
+    goalGenerator: goalGenerator,
+    goalRepo: goalRepo,
   );
 });
 

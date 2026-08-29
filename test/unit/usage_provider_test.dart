@@ -4,7 +4,7 @@ import 'package:cleartime/services/usage/demo_usage_data_provider.dart';
 void main() {
   group('UsageDataProvider and Demo Adapter Tests', () {
     test('DemoUsageDataProvider provides rich deterministic usage data', () async {
-      final provider = DemoUsageDataProvider();
+      final provider = DemoUsageDataProvider(isDynamic: false);
       expect(await provider.hasUsagePermission(), isTrue);
 
       final today = await provider.getTodayUsage();

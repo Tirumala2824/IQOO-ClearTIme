@@ -11,12 +11,18 @@ class ChildShellScreen extends StatelessWidget {
   int _calculateSelectedIndex(BuildContext context) {
     final String location = GoRouterState.of(context).matchedLocation;
     if (location == AppRoutes.child) return 0;
-    if (location.startsWith(AppRoutes.childInsights)) return 1;
-    if (location.startsWith(AppRoutes.childMissions)) return 2;
-    if (location.startsWith(AppRoutes.childGoals)) return 3;
-    if (location.startsWith(AppRoutes.childProgress)) return 4;
-    if (location.startsWith(AppRoutes.childAi)) return 5;
-    if (location.startsWith(AppRoutes.childSettings)) return 6;
+    if (location.startsWith(AppRoutes.childGoals) ||
+        location.startsWith(AppRoutes.childMissions)) {
+      return 1;
+    }
+    if (location.startsWith(AppRoutes.childProgress) ||
+        location.startsWith(AppRoutes.childInsights)) {
+      return 2;
+    }
+    if (location.startsWith(AppRoutes.childSettings) ||
+        location.startsWith(AppRoutes.childPrivacyCenter)) {
+      return 3;
+    }
     return 0;
   }
 
@@ -26,21 +32,12 @@ class ChildShellScreen extends StatelessWidget {
         context.go(AppRoutes.child);
         break;
       case 1:
-        context.go(AppRoutes.childInsights);
-        break;
-      case 2:
-        context.go(AppRoutes.childMissions);
-        break;
-      case 3:
         context.go(AppRoutes.childGoals);
         break;
-      case 4:
+      case 2:
         context.go(AppRoutes.childProgress);
         break;
-      case 5:
-        context.go(AppRoutes.childAi);
-        break;
-      case 6:
+      case 3:
         context.go(AppRoutes.childSettings);
         break;
     }
@@ -56,6 +53,7 @@ class ChildShellScreen extends StatelessWidget {
         selectedIndex: currentIndex,
         onDestinationSelected: (index) => _onItemTapped(index, context),
         backgroundColor: Colors.white,
+        elevation: 8,
         indicatorColor: AppTheme.childSecondary.withAlpha((0.2 * 255).round()),
         destinations: const [
           NavigationDestination(
@@ -65,39 +63,21 @@ class ChildShellScreen extends StatelessWidget {
             label: 'Home',
           ),
           NavigationDestination(
-            icon: Icon(Icons.lightbulb_outline_rounded),
-            selectedIcon:
-                Icon(Icons.lightbulb_rounded, color: AppTheme.childSecondary),
-            label: 'Insights',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.flag_outlined),
-            selectedIcon:
-                Icon(Icons.flag_rounded, color: AppTheme.childSecondary),
-            label: 'Missions',
-          ),
-          NavigationDestination(
             icon: Icon(Icons.track_changes_rounded),
             selectedIcon:
                 Icon(Icons.track_changes_rounded, color: AppTheme.childSecondary),
-            label: 'Goals',
+            label: 'Goal',
           ),
           NavigationDestination(
-            icon: Icon(Icons.military_tech_outlined),
-            selectedIcon: Icon(Icons.military_tech_rounded,
+            icon: Icon(Icons.emoji_events_outlined),
+            selectedIcon: Icon(Icons.emoji_events_rounded,
                 color: AppTheme.childSecondary),
             label: 'Progress',
           ),
           NavigationDestination(
-            icon: Icon(Icons.smart_toy_outlined),
+            icon: Icon(Icons.face_outlined),
             selectedIcon:
-                Icon(Icons.smart_toy_rounded, color: AppTheme.childSecondary),
-            label: 'Buddy AI',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.tune_outlined),
-            selectedIcon:
-                Icon(Icons.tune_rounded, color: AppTheme.childSecondary),
+                Icon(Icons.face_rounded, color: AppTheme.childSecondary),
             label: 'Me',
           ),
         ],

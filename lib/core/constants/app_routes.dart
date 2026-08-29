@@ -9,6 +9,7 @@ class AppRoutes {
   // Parent routes
   static const String parent = '/parent';
   static const String parentChildren = '/parent/children';
+  static const String parentTasks = '/parent/tasks';
   static const String parentReports = '/parent/reports';
   static const String parentReportDetail = '/parent/reports/detail';
   static const String parentReportCompare = '/parent/reports/compare';

@@ -111,17 +111,9 @@ class ChildAiCoachController extends StateNotifier<ChildAiCoachState> {
         isThinking: false,
       );
     } catch (e) {
-      final fallbackMsg = ChatMessage(
-        id: 'err-${DateTime.now().millisecondsSinceEpoch}',
-        text:
-            "I'm here offline! Remember to take healthy 5-minute screen pauses and keep exploring.",
-        isUser: false,
-        timestamp: DateTime.now(),
-      );
       state = state.copyWith(
-        messages: [...state.messages, fallbackMsg],
         isThinking: false,
-        errorMessage: e.toString(),
+        errorMessage: 'Buddy is resting offline: ${e.toString()}',
       );
     }
   }

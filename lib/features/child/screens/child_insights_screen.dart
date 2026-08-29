@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../data/models/coaching_models.dart';
 import '../controllers/child_dashboard_controller.dart';
 
 class ChildInsightsScreen extends ConsumerWidget {
@@ -13,21 +14,8 @@ class ChildInsightsScreen extends ConsumerWidget {
     final focusMin = usage.focusMinutes;
     final totalMin = usage.totalMinutes;
     final breaks = usage.breakCount;
-    final topCategory = usage.categories.isNotEmpty
-        ? usage.categories.first.category
-        : 'Learning';
-
-    // Generate dynamic insights based on actual usage
-    final insights = _generateDynamicInsights(
-      focusMinutes: focusMin,
-      totalMinutes: totalMin,
-      breakCount: breaks,
-      topCategory: topCategory,
-      changePercent: usage.changePercentageFromYesterday,
-    );
-
-    // Dynamic tip of the day based on hour
-    final tipOfDay = _getTipOfDay();
+    final patterns = childState.detectedPatterns;
+    final history = childState.coachingHistory;
 
     return Scaffold(
       backgroundColor: AppTheme.childSurface,
@@ -47,20 +35,48 @@ class ChildInsightsScreen extends ConsumerWidget {
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: AppTheme.childPrimary.withAlpha((0.25 * 255).round()),
+                  blurRadius: 16,
+                  offset: const Offset(0, 8),
+                ),
+              ],
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Today\'s Snapshot',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Today\'s Snapshot',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withAlpha((0.2 * 255).round()),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        '🔥 ${history.streakDays}d Streak',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 14),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
@@ -89,9 +105,72 @@ class ChildInsightsScreen extends ConsumerWidget {
               ],
             ),
           ),
+
           const SizedBox(height: 20),
 
-          // Dynamic Tip
+          // ─── DETECTED PATTERNS SECTION ───
+          Row(
+            children: [
+              const Text('🔍', style: TextStyle(fontSize: 18)),
+              const SizedBox(width: 8),
+              Text(
+                'Detected Habit Patterns',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.childTextDark,
+                    ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+
+          if (patterns.isEmpty)
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Text(
+                  'No habit anomalies detected today. Keep up your balanced screen routine!',
+                  style: TextStyle(color: AppTheme.neutralMuted, fontSize: 13),
+                ),
+              ),
+            )
+          else
+            ...patterns.map((p) => _buildPatternCard(p)),
+
+          const SizedBox(height: 20),
+
+          // ─── COACHING TIMELINE / HISTORY ───
+          Row(
+            children: [
+              const Text('📜', style: TextStyle(fontSize: 18)),
+              const SizedBox(width: 8),
+              Text(
+                'Coaching Loop Timeline',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.childTextDark,
+                    ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+
+          if (history.sessions.isEmpty)
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Text(
+                  'Coaching history will record daily as you complete goals.',
+                  style: TextStyle(color: AppTheme.neutralMuted, fontSize: 13),
+                ),
+              ),
+            )
+          else
+            ...history.sessions.reversed.take(5).map((s) => _buildSessionTile(s)),
+
+          const SizedBox(height: 20),
+
+          // Dynamic Tip Card
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
@@ -99,204 +178,79 @@ class ChildInsightsScreen extends ConsumerWidget {
               borderRadius: BorderRadius.circular(18),
               border: Border.all(color: AppTheme.neutralBorder),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child: Row(
               children: [
-                const Row(
-                  children: [
-                    Icon(Icons.emoji_objects_rounded,
-                        color: AppTheme.childAccent, size: 24),
-                    SizedBox(width: 8),
-                    Text(
-                      'Tip of the Day',
-                      style:
-                          TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                    ),
-                  ],
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppTheme.childAccent.withAlpha((0.15 * 255).round()),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Text('✨', style: TextStyle(fontSize: 22)),
                 ),
-                const SizedBox(height: 10),
-                Text(
-                  tipOfDay,
-                  style: const TextStyle(
-                      color: AppTheme.childTextDark, fontSize: 14, height: 1.4),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Mindful Tip of the Day',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                          color: AppTheme.childTextDark,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _getTipOfDay(),
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          color: AppTheme.neutralMuted,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 20),
-
-          Text(
-            'Your Insights',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.childTextDark,
-                ),
-          ),
-          const SizedBox(height: 12),
-
-          ...insights.map((insight) => Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: _buildInsightCard(
-                  icon: insight.icon,
-                  title: insight.title,
-                  description: insight.description,
-                  badge: insight.badge,
-                  color: insight.color,
-                ),
-              )),
         ],
       ),
     );
   }
 
-  Widget _buildSnapshotStat(String value, String label, IconData icon) {
-    return Column(
-      children: [
-        Icon(icon, color: Colors.white, size: 20),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-          ),
-        ),
-        Text(
-          label,
-          style: const TextStyle(color: Colors.white70, fontSize: 10),
-        ),
-      ],
-    );
-  }
+  Widget _buildPatternCard(DetectedPattern pattern) {
+    final isPos = pattern.type == PatternType.positive;
+    final isConcern = pattern.type == PatternType.concerning;
 
-  String _getTipOfDay() {
-    final hour = DateTime.now().hour;
-    if (hour < 10) {
-      return '🌅 Morning is the best time for focused learning! Your brain is fresh and ready to absorb new information. Try a 20-minute study sprint before play time.';
-    } else if (hour < 14) {
-      return '☀️ The 20-20-20 Rule: Every 20 minutes spent looking at a screen, look at something 20 feet away for 20 seconds. It gives your eyes a super recharge!';
-    } else if (hour < 18) {
-      return '🎯 Afternoon energy tip: Take a 5-minute movement break! Jump, stretch, or do a silly dance. You\'ll come back to your tasks feeling refreshed.';
-    } else {
-      return '🌙 Evening wind-down: Putting your phone away 30 minutes before sleep helps you wake up refreshed and recharged for tomorrow\'s adventures!';
-    }
-  }
+    final borderColor = isPos
+        ? AppTheme.childSecondary
+        : isConcern
+            ? AppTheme.warningOrange
+            : AppTheme.neutralBorder;
 
-  List<_InsightItem> _generateDynamicInsights({
-    required int focusMinutes,
-    required int totalMinutes,
-    required int breakCount,
-    required String topCategory,
-    required double changePercent,
-  }) {
-    final insights = <_InsightItem>[];
+    final badgeColor = isPos
+        ? AppTheme.childSecondary.withAlpha((0.15 * 255).round())
+        : isConcern
+            ? AppTheme.warningOrange.withAlpha((0.15 * 255).round())
+            : AppTheme.neutralBg;
 
-    // Focus ratio insight
-    final focusRatio = totalMinutes > 0 ? focusMinutes / totalMinutes : 0.0;
-    if (focusRatio > 0.5) {
-      insights.add(_InsightItem(
-        icon: Icons.menu_book_rounded,
-        title: 'Focus Champion!',
-        description:
-            'You\'ve spent ${(focusRatio * 100).round()}% of your screen time on focused activities today. That\'s excellent balance!',
-        badge: 'Top Habit',
-        color: AppTheme.childSecondary,
-      ));
-    } else if (focusRatio > 0.3) {
-      insights.add(_InsightItem(
-        icon: Icons.menu_book_rounded,
-        title: 'Building Focus Habits',
-        description:
-            '${(focusRatio * 100).round()}% focus time today. Try grouping study sessions together to boost this to 50%+!',
-        badge: 'Improving',
-        color: AppTheme.childPrimary,
-      ));
-    } else {
-      insights.add(_InsightItem(
-        icon: Icons.menu_book_rounded,
-        title: 'Focus Time Opportunity',
-        description:
-            'Your focus ratio is ${(focusRatio * 100).round()}% today. Try a quick 15-minute learning sprint to boost it!',
-        badge: 'Try This',
-        color: AppTheme.warningOrange,
-      ));
-    }
+    final textColor = isPos
+        ? AppTheme.childSecondary
+        : isConcern
+            ? AppTheme.warningOrange
+            : AppTheme.neutralMuted;
 
-    // Break insight
-    if (breakCount >= 5) {
-      insights.add(_InsightItem(
-        icon: Icons.timer_outlined,
-        title: 'Break Master! 🧘',
-        description:
-            'Amazing! You\'ve taken $breakCount mindful breaks today. Your eyes and brain thank you!',
-        badge: 'Achieved',
-        color: AppTheme.successGreen,
-      ));
-    } else if (breakCount > 0) {
-      insights.add(_InsightItem(
-        icon: Icons.timer_outlined,
-        title: 'Mindful Breaks',
-        description:
-            'You\'ve taken $breakCount break${breakCount > 1 ? "s" : ""} so far. Aim for 5 daily breaks to keep your brain sharp!',
-        badge: '${5 - breakCount} more to go',
-        color: AppTheme.childSecondary,
-      ));
-    } else {
-      insights.add(_InsightItem(
-        icon: Icons.timer_outlined,
-        title: 'Time for a Break!',
-        description:
-            'No breaks taken yet today. Take a quick stretch or look out the window for 20 seconds!',
-        badge: 'Start Now',
-        color: AppTheme.warningOrange,
-      ));
-    }
-
-    // Usage trend insight
-    if (changePercent < -10) {
-      insights.add(_InsightItem(
-        icon: Icons.trending_down_rounded,
-        title: 'Great Screen Balance',
-        description:
-            'Your screen time is ${changePercent.abs().toStringAsFixed(0)}% less than yesterday. You\'re building healthy habits!',
-        badge: 'Trending Down',
-        color: AppTheme.successGreen,
-      ));
-    } else if (changePercent > 15) {
-      insights.add(_InsightItem(
-        icon: Icons.trending_up_rounded,
-        title: 'Screen Time Alert',
-        description:
-            'Your usage is ${changePercent.toStringAsFixed(0)}% higher than yesterday. Consider taking a longer outdoor break.',
-        badge: 'Check In',
-        color: AppTheme.warningOrange,
-      ));
-    }
-
-    // Top category insight
-    insights.add(_InsightItem(
-      icon: Icons.category_rounded,
-      title: 'Top Activity: $topCategory',
-      description:
-          'Your most-used category today is $topCategory. Variety is key — try exploring a different app category!',
-      badge: 'Activity Mix',
-      color: AppTheme.childPrimary,
-    ));
-
-    return insights;
-  }
-
-  Widget _buildInsightCard({
-    required IconData icon,
-    required String title,
-    required String description,
-    required String badge,
-    required Color color,
-  }) {
     return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(
+            color: borderColor.withAlpha((0.5 * 255).round()), width: 1.2),
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(14.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -305,57 +259,148 @@ class ChildInsightsScreen extends ConsumerWidget {
               children: [
                 Row(
                   children: [
-                    Icon(icon, color: color, size: 22),
+                    Text(pattern.emoji, style: const TextStyle(fontSize: 16)),
                     const SizedBox(width: 8),
                     Text(
-                      title,
+                      pattern.title,
                       style: const TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 16),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                        color: AppTheme.childTextDark,
+                      ),
                     ),
                   ],
                 ),
                 Container(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
-                    color: color.withAlpha((0.15 * 255).round()),
-                    borderRadius: BorderRadius.circular(8),
+                    color: badgeColor,
+                    borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
-                    badge,
+                    pattern.categoryLabel,
                     style: TextStyle(
-                        color: color,
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold),
+                      color: textColor,
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             Text(
-              description,
-              style: const TextStyle(
-                  color: AppTheme.neutralMuted, fontSize: 13, height: 1.4),
+              pattern.description,
+              style: const TextStyle(fontSize: 12.5, color: AppTheme.neutralMuted),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppTheme.childSurface,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.tips_and_updates_rounded,
+                      size: 14, color: AppTheme.childPrimary),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Coach Suggestion: ${pattern.suggestedAction}',
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        color: AppTheme.childPrimary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
       ),
     );
   }
-}
 
-class _InsightItem {
-  final IconData icon;
-  final String title;
-  final String description;
-  final String badge;
-  final Color color;
+  Widget _buildSessionTile(CoachingSession session) {
+    final eval = session.previousGoalEvaluation;
+    final dateStr =
+        '${session.date.month}/${session.date.day}';
 
-  const _InsightItem({
-    required this.icon,
-    required this.title,
-    required this.description,
-    required this.badge,
-    required this.color,
-  });
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        leading: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: AppTheme.childPrimary.withAlpha((0.1 * 255).round()),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text(
+            session.statusEmoji,
+            style: const TextStyle(fontSize: 18),
+          ),
+        ),
+        title: Text(
+          session.generatedGoal?.title ?? 'Daily Coaching Session',
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5),
+        ),
+        subtitle: Text(
+          eval != null
+              ? '${eval.resultLabel} • ${eval.feedbackMessage}'
+              : 'Usage: ${session.usageSnapshot.totalMinutes}m screen, ${session.usageSnapshot.focusMinutes}m focus',
+          style: const TextStyle(fontSize: 11.5),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
+        trailing: Text(
+          dateStr,
+          style: const TextStyle(
+            color: AppTheme.neutralMuted,
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSnapshotStat(String value, String label, IconData icon) {
+    return Column(
+      children: [
+        Icon(icon, color: Colors.white, size: 22),
+        const SizedBox(height: 6),
+        Text(
+          value,
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w800,
+            fontSize: 16,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          label,
+          style: TextStyle(
+            color: Colors.white.withAlpha((0.85 * 255).round()),
+            fontSize: 11,
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _getTipOfDay() {
+    final hour = DateTime.now().hour;
+    if (hour < 12) {
+      return 'Morning focus is high! Tackle your hardest learning challenge before noon.';
+    } else if (hour < 17) {
+      return 'Remember the 20-20-20 rule: every 20 minutes, look 20 feet away for 20 seconds!';
+    } else {
+      return 'Wind down before sleep. Swap screen time for a relaxing book or family chat tonight.';
+    }
+  }
 }

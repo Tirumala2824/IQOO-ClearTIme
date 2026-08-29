@@ -7,18 +7,22 @@ abstract class LocalGoalRepository {
   Future<void> updateGoalProgress(String id, int minutes);
   Future<void> updateGoalStatus(String id, GoalStatus status);
   Future<void> deleteGoal(String id);
+  Future<ChildGoal?> getActiveAIGoal();
+  Future<List<ChildGoal>> getGoalHistory();
 }
 
 class InMemoryLocalGoalRepository implements LocalGoalRepository {
   final Map<String, ChildGoal> _goals = {};
 
-  InMemoryLocalGoalRepository() {
-    _initDefaultGoals();
+  InMemoryLocalGoalRepository({bool seedAiHistory = false}) {
+    _initDefaultGoals(seedAiHistory: seedAiHistory);
   }
 
-  void _initDefaultGoals() {
+  void _initDefaultGoals({bool seedAiHistory = false}) {
     final now = DateTime.now();
-    final defaults = [
+
+    // User-created goals (existing defaults)
+    final userGoals = [
       ChildGoal(
         id: 'g-daily-focus',
         title: 'Daily Focus Goal',
@@ -27,6 +31,7 @@ class InMemoryLocalGoalRepository implements LocalGoalRepository {
         targetMinutes: 60,
         currentMinutes: 0,
         status: GoalStatus.active,
+        source: GoalSource.userCreated,
         createdAt: now.subtract(const Duration(days: 3)),
       ),
       ChildGoal(
@@ -37,6 +42,7 @@ class InMemoryLocalGoalRepository implements LocalGoalRepository {
         targetMinutes: 4,
         currentMinutes: 0,
         status: GoalStatus.active,
+        source: GoalSource.userCreated,
         createdAt: now.subtract(const Duration(days: 2)),
       ),
       ChildGoal(
@@ -47,6 +53,7 @@ class InMemoryLocalGoalRepository implements LocalGoalRepository {
         targetMinutes: 350,
         currentMinutes: 0,
         status: GoalStatus.active,
+        source: GoalSource.userCreated,
         createdAt: now.subtract(const Duration(days: 5)),
       ),
       ChildGoal(
@@ -57,18 +64,20 @@ class InMemoryLocalGoalRepository implements LocalGoalRepository {
         targetMinutes: 60,
         currentMinutes: 0,
         status: GoalStatus.active,
-        createdAt: now.subtract(const Duration(days: 1)),
+        source: GoalSource.userCreated,
+        createdAt: now,
       ),
     ];
 
-    for (final g in defaults) {
+    for (final g in userGoals) {
       _goals[g.id] = g;
     }
   }
 
   @override
   Future<List<ChildGoal>> getGoals() async {
-    return _goals.values.toList();
+    return _goals.values.toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
   }
 
   @override
@@ -111,4 +120,24 @@ class InMemoryLocalGoalRepository implements LocalGoalRepository {
   Future<void> deleteGoal(String id) async {
     _goals.remove(id);
   }
+
+  @override
+  Future<ChildGoal?> getActiveAIGoal() async {
+    final aiGoals = _goals.values
+        .where((g) =>
+            g.source == GoalSource.aiGenerated &&
+            g.status == GoalStatus.active)
+        .toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return aiGoals.isNotEmpty ? aiGoals.first : null;
+  }
+
+  @override
+  Future<List<ChildGoal>> getGoalHistory() async {
+    return _goals.values
+        .where((g) => g.status == GoalStatus.completed)
+        .toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+  }
 }
+

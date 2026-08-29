@@ -74,16 +74,28 @@ class LocalAICoachService {
       final focusTimeStr =
           focusHours > 0 ? '${focusHours}h ${focusMins}m' : '${focusMins}m';
 
+      final prevMins = context.usageChangePercentage != 0
+          ? (context.todayUsageMinutes / (1.0 + (context.usageChangePercentage / 100.0))).round().clamp(0, 1440)
+          : context.todayUsageMinutes;
+      final prevHours = prevMins ~/ 60;
+      final prevRemainMins = prevMins % 60;
+      final prevTimeStr = prevMins > 0 ? (prevHours > 0 ? '${prevHours}h ${prevRemainMins}m' : '${prevRemainMins}m') : '0m';
+
+      final totalGoalsAndMissions = context.activeGoalsCount + context.completedMissions;
+      final progressPct = totalGoalsAndMissions > 0
+          ? ((context.completedMissions / totalGoalsAndMissions) * 100).round()
+          : 0;
+
       final vars = {
         'child_name': 'Explorer',
         'screen_time': screenTimeStr,
-        'previous_screen_time': '2h 30m',
+        'previous_screen_time': prevTimeStr,
         'usage_change':
             '${context.usageChangePercentage >= 0 ? "+" : ""}${context.usageChangePercentage.toStringAsFixed(1)}%',
         'focus_time': focusTimeStr,
         'top_category': context.topCategory,
-        'goal_progress': '${context.activeGoalsCount > 0 ? 75 : 100}%',
-        'achievement': 'Mindful Learner',
+        'goal_progress': '$progressPct%',
+        'achievement': context.completedMissions > 0 ? 'Active Explorer' : 'Getting Started',
         'break_count': '${context.breakCount}',
         'completed_missions': '${context.completedMissions}',
       };

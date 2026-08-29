@@ -308,7 +308,7 @@ class _LocalAiSettingsScreenState extends ConsumerState<LocalAiSettingsScreen> {
                     ),
                     const SizedBox(width: 10),
                     Text(
-                      isEnabled ? 'AI Status: Running' : 'AI Status: Disabled',
+                      isEnabled ? 'AI Status: Running Locally' : 'AI Status: Disabled',
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 16,
