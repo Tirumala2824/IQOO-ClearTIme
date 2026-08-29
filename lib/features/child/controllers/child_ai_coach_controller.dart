@@ -100,9 +100,10 @@ class ChildAiCoachController extends StateNotifier<ChildAiCoachState> {
 
       final aiMsg = ChatMessage(
         id: 'reply-${DateTime.now().millisecondsSinceEpoch}',
-        text: reply,
+        text: reply.answer,
         isUser: false,
         timestamp: DateTime.now(),
+        structuredResponse: reply,
       );
 
       state = state.copyWith(

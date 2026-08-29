@@ -3,6 +3,8 @@ import 'package:cleartime/data/models/usage_models.dart';
 import 'package:cleartime/data/models/mission_model.dart';
 import 'package:cleartime/data/models/goal_model.dart';
 import 'package:cleartime/data/models/reflection_model.dart';
+import 'package:cleartime/data/repositories/local_prompt_repository.dart';
+import 'package:cleartime/data/repositories/local_ai_settings_repository.dart';
 import 'package:cleartime/services/llm/local_ai_context_builder.dart';
 import 'package:cleartime/services/llm/local_ai_coach_service.dart';
 import 'package:cleartime/services/llm/on_device_llm_provider.dart';
@@ -79,9 +81,14 @@ void main() {
 
     test('LocalAICoachService answers child prompts with positive reinforcement', () async {
       final llmProvider = OnDeviceLLMProvider();
+      final promptRepo = InMemoryLocalPromptRepository();
+      final settingsRepo = InMemoryLocalAISettingsRepository();
+
       final coach = LocalAICoachService(
         llmProvider: llmProvider,
         contextBuilder: builder,
+        promptRepo: promptRepo,
+        settingsRepo: settingsRepo,
       );
 
       final context = builder.buildContext(
@@ -99,8 +106,9 @@ void main() {
         context: context,
       );
 
-      expect(reply, isNotEmpty);
-      expect(reply.toLowerCase(), anyOf(contains('wonderfully'), contains('great'), contains('focus')));
+      expect(reply.answer, isNotEmpty);
+      expect(reply.answer.toLowerCase(),
+          anyOf(contains('wonderfully'), contains('great'), contains('focus'), contains('progress')));
     });
   });
 }

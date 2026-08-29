@@ -14,6 +14,12 @@ import '../../features/parent/screens/parent_reports_screen.dart';
 import '../../features/parent/screens/parent_triggers_screen.dart';
 import '../../features/parent/screens/parent_ai_screen.dart';
 import '../../features/parent/screens/parent_settings_screen.dart';
+import '../../features/parent/screens/local_ai_settings_screen.dart';
+import '../../features/parent/screens/model_manager_screen.dart';
+import '../../features/parent/screens/prompt_manager_screen.dart';
+import '../../features/parent/screens/prompt_editor_screen.dart';
+import '../../features/parent/screens/prompt_comparison_screen.dart';
+import '../../features/parent/screens/ai_diagnostics_screen.dart';
 import '../../features/child/screens/child_shell_screen.dart';
 import '../../features/child/screens/child_dashboard_screen.dart';
 import '../../features/child/screens/child_insights_screen.dart';
@@ -55,6 +61,50 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.childJoinFamily,
         builder: (context, state) => const JoinFamilyScreen(),
+      ),
+
+      // Phase 3 Local AI Control Center Routes
+      GoRoute(
+        path: AppRoutes.localAiSettings,
+        builder: (context, state) => const LocalAiSettingsScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.modelManager,
+        builder: (context, state) => const ModelManagerScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.promptManager,
+        builder: (context, state) => const PromptManagerScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.promptEditor,
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          final promptId = extra?['promptId'] as String? ?? 'prompt-child-insight';
+          return PromptEditorScreen(promptId: promptId);
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.promptComparison,
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          final promptId = extra?['promptId'] as String? ?? 'prompt-child-insight';
+          final versionA = (extra?['versionA'] as num? ?? 1).toInt();
+          final versionB = (extra?['versionB'] as num? ?? 2).toInt();
+          return PromptComparisonScreen(
+            promptId: promptId,
+            versionA: versionA,
+            versionB: versionB,
+          );
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.aiDiagnostics,
+        builder: (context, state) => const AiDiagnosticsScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.childAiSettings,
+        builder: (context, state) => const LocalAiSettingsScreen(),
       ),
 
       // Parent Navigation Shell

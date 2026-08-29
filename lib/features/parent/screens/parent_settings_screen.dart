@@ -103,6 +103,40 @@ class ParentSettingsScreen extends ConsumerWidget {
 
           const SizedBox(height: 24),
           Text(
+            'Local AI Engine & Control Center',
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          Card(
+            child: ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppTheme.parentSecondary.withAlpha((0.15 * 255).round()),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.psychology_rounded,
+                    color: AppTheme.parentSecondary, size: 24),
+              ),
+              title: const Text(
+                'Local AI Control Center',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+              ),
+              subtitle: const Text(
+                'Manage on-device models, prompt templates & offline diagnostics',
+                style: TextStyle(color: AppTheme.neutralMuted, fontSize: 12),
+              ),
+              trailing: const Icon(Icons.arrow_forward_ios_rounded,
+                  size: 14, color: AppTheme.neutralMuted),
+              onTap: () => context.push(AppRoutes.localAiSettings),
+            ),
+          ),
+
+          const SizedBox(height: 24),
+          Text(
             'Notification Preferences',
             style: Theme.of(context)
                 .textTheme

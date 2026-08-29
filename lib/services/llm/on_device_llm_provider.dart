@@ -25,6 +25,12 @@ class OnDeviceLLMProvider implements LocalLLMProvider {
   }
 
   @override
+  Future<void> loadModelById(String modelId) async {
+    await _bridge.loadModelById(modelId);
+    _isLoaded = true;
+  }
+
+  @override
   Future<void> unloadModel() async {
     await _bridge.unloadModel();
     _isLoaded = false;
@@ -32,16 +38,7 @@ class OnDeviceLLMProvider implements LocalLLMProvider {
 
   @override
   Future<ModelInfo> getModelInfo() async {
-    final info = await _bridge.getModelInfo();
-    return ModelInfo(
-      modelName: info.modelName,
-      version: info.version,
-      contextLimit: info.contextLimit,
-      quantization: info.quantization,
-      sizeMb: info.sizeMb,
-      isLoaded: _isLoaded,
-      engineType: info.engineType,
-    );
+    return await _bridge.getModelInfo();
   }
 
   @override
@@ -50,10 +47,51 @@ class OnDeviceLLMProvider implements LocalLLMProvider {
   }
 
   @override
+  Future<int> getMemoryUsage() async {
+    return await _bridge.getMemoryUsage();
+  }
+
+  @override
+  Future<List<LocalModelCatalogEntry>> getInstalledModels() async {
+    return await _bridge.getInstalledModels();
+  }
+
+  @override
+  Future<List<LocalModelCatalogEntry>> getAvailableModels() async {
+    return await _bridge.getAvailableModels();
+  }
+
+  @override
+  Future<bool> installModel(String modelId) async {
+    return await _bridge.installModel(modelId);
+  }
+
+  @override
+  Future<bool> deleteModel(String modelId) async {
+    return await _bridge.deleteModel(modelId);
+  }
+
+  @override
+  Future<bool> selectModel(String modelId) async {
+    return await _bridge.selectModel(modelId);
+  }
+
+  @override
   Future<String> generate({required String prompt}) async {
     if (!_isLoaded) {
       await loadModel();
     }
     return await _bridge.generate(prompt);
+  }
+
+  @override
+  Future<StructuredAIResponse> testInference({
+    String? modelId,
+    String? testPrompt,
+  }) async {
+    return await _bridge.testInference(
+      modelId: modelId,
+      testPrompt: testPrompt,
+    );
   }
 }

@@ -22,6 +22,12 @@ import 'package:cleartime/features/child/screens/child_goals_screen.dart';
 import 'package:cleartime/features/child/screens/child_progress_screen.dart';
 import 'package:cleartime/features/child/screens/child_ai_screen.dart';
 import 'package:cleartime/features/onboarding/screens/onboarding_screen.dart';
+import 'package:cleartime/features/parent/screens/local_ai_settings_screen.dart';
+import 'package:cleartime/features/parent/screens/model_manager_screen.dart';
+import 'package:cleartime/features/parent/screens/prompt_manager_screen.dart';
+import 'package:cleartime/features/parent/screens/prompt_editor_screen.dart';
+import 'package:cleartime/features/parent/screens/ai_diagnostics_screen.dart';
+import 'package:cleartime/features/parent/screens/parent_ai_screen.dart';
 import 'package:cleartime/services/usage/demo_usage_data_provider.dart';
 
 class FakeAuthRepository implements AuthRepository {
@@ -389,6 +395,125 @@ void main() {
       expect(find.text('100% Offline AI'), findsOneWidget);
       expect(find.text('How did I do today?'), findsOneWidget);
       expect(find.text('Help me focus.'), findsOneWidget);
+    });
+
+    // --- Phase 3 Local AI Control Center Tests ---
+
+    testWidgets('LocalAiSettingsScreen renders AI status, active model, and benchmark runner',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(
+        const ProviderScope(
+          child: MaterialApp(
+            home: LocalAiSettingsScreen(),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump();
+
+      expect(find.text('Local AI Control Center'), findsOneWidget);
+      expect(find.text('Zero Cloud LLM Dependency'), findsOneWidget);
+      expect(find.text('AI Status: Running Locally'), findsOneWidget);
+      expect(find.text('Active Model'), findsOneWidget);
+      expect(find.text('Model Manager'), findsOneWidget);
+      expect(find.text('Prompt Manager & Templates'), findsOneWidget);
+      expect(find.text('Local AI Diagnostics'), findsOneWidget);
+    });
+
+    testWidgets('ModelManagerScreen renders tabs for installed models and catalog',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(
+        const ProviderScope(
+          child: MaterialApp(
+            home: ModelManagerScreen(),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump();
+
+      expect(find.text('Local Model Manager'), findsOneWidget);
+      expect(find.textContaining('Installed'), findsOneWidget);
+      expect(find.textContaining('Available Catalog'), findsOneWidget);
+      expect(find.text('ClearTime-SLM-Nano'), findsOneWidget);
+    });
+
+    testWidgets('PromptManagerScreen renders prompt template cards and actions',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(
+        const ProviderScope(
+          child: MaterialApp(
+            home: PromptManagerScreen(),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump();
+
+      expect(find.text('Prompt Manager'), findsOneWidget);
+      expect(find.text('Child Daily Insight'), findsOneWidget);
+    });
+
+    testWidgets('PromptEditorScreen renders variable chips and preview',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(
+        const ProviderScope(
+          child: MaterialApp(
+            home: PromptEditorScreen(promptId: 'prompt-child-insight'),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump();
+
+      expect(find.text('Insert Supported Variables'), findsOneWidget);
+      expect(find.text('{{child_name}}'), findsOneWidget);
+      expect(find.text('{{screen_time}}'), findsOneWidget);
+      expect(find.text('Rendered Template Preview (Local Data Context)'), findsOneWidget);
+      expect(find.text('Test Prompt Locally'), findsOneWidget);
+    });
+
+    testWidgets('AiDiagnosticsScreen renders latency, tokens, and RAM telemetry',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(
+        const ProviderScope(
+          child: MaterialApp(
+            home: AiDiagnosticsScreen(),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump();
+
+      expect(find.text('Local AI Diagnostics'), findsOneWidget);
+      expect(find.text('Inference Latency'), findsOneWidget);
+      expect(find.text('RAM Consumption'), findsOneWidget);
+      expect(find.text('Network Transfer'), findsOneWidget);
+      expect(find.text('Privacy Boundaries Verification'), findsOneWidget);
+    });
+
+    testWidgets('ParentAiScreen renders parent assistant with offline banner',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            usageDataProvider.overrideWithValue(DemoUsageDataProvider()),
+          ],
+          child: const MaterialApp(
+            home: ParentAiScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Parent AI Assistant'), findsOneWidget);
+      expect(find.textContaining('100% On-Device AI'), findsOneWidget);
+      expect(find.text('Summarize today\'s balance'), findsOneWidget);
     });
   });
 }

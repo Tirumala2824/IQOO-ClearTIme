@@ -49,6 +49,9 @@ class MockLocalLLMProvider implements LocalLLMProvider {
   Future<void> loadModel() async {}
 
   @override
+  Future<void> loadModelById(String modelId) async {}
+
+  @override
   Future<void> unloadModel() async {}
 
   @override
@@ -68,6 +71,28 @@ class MockLocalLLMProvider implements LocalLLMProvider {
 
   @override
   Future<int> getContextLimit() async => 2048;
+
+  @override
+  Future<int> getMemoryUsage() async => 280;
+
+  @override
+  Future<List<LocalModelCatalogEntry>> getInstalledModels() async => [];
+
+  @override
+  Future<List<LocalModelCatalogEntry>> getAvailableModels() async => [];
+
+  @override
+  Future<bool> installModel(String modelId) async => true;
+
+  @override
+  Future<bool> deleteModel(String modelId) async => true;
+
+  @override
+  Future<bool> selectModel(String modelId) async => true;
+
+  @override
+  Future<StructuredAIResponse> testInference({String? modelId, String? testPrompt}) async =>
+      const StructuredAIResponse(answer: 'Local test OK', confidence: 1.0);
 }
 
 class MockNotificationProvider implements NotificationProvider {

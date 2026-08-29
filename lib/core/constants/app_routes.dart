@@ -15,6 +15,14 @@ class AppRoutes {
   static const String parentSettings = '/parent/settings';
   static const String parentInviteChild = '/parent/children/invite';
 
+  // Local AI Control Center routes (Parent & Shared)
+  static const String localAiSettings = '/parent/settings/ai';
+  static const String modelManager = '/parent/settings/ai/models';
+  static const String promptManager = '/parent/settings/ai/prompts';
+  static const String promptEditor = '/parent/settings/ai/prompts/edit';
+  static const String promptComparison = '/parent/settings/ai/prompts/compare';
+  static const String aiDiagnostics = '/parent/settings/ai/diagnostics';
+
   // Child routes
   static const String child = '/child';
   static const String childInsights = '/child/insights';
@@ -24,4 +32,5 @@ class AppRoutes {
   static const String childAi = '/child/ai';
   static const String childSettings = '/child/settings';
   static const String childJoinFamily = '/child/join';
+  static const String childAiSettings = '/child/settings/ai';
 }

@@ -67,6 +67,31 @@ class ChildSettingsScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 20),
           Text(
+            'On-Device AI Buddy',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: AppTheme.childTextDark,
+                ),
+          ),
+          const SizedBox(height: 8),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.smart_toy_outlined,
+                  color: AppTheme.childSecondary, size: 28),
+              title: const Text(
+                'My Wellbeing Buddy Settings',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              subtitle: const Text(
+                '100% private, runs offline on this phone with zero cloud AI',
+              ),
+              trailing: const Icon(Icons.arrow_forward_ios_rounded,
+                  size: 14, color: AppTheme.neutralMuted),
+              onTap: () => context.push(AppRoutes.localAiSettings),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text(
             'Privacy & Local Storage',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.bold,
