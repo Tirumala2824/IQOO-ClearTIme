@@ -29,6 +29,7 @@ class _ParentTasksScreenState extends ConsumerState<ParentTasksScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   String? _filterChildId;
+  String _missionTypeFilter = 'all'; // 'all', 'parent', 'ai'
 
   @override
   void initState() {
@@ -429,6 +430,34 @@ class _ParentTasksScreenState extends ConsumerState<ParentTasksScreen>
             const Divider(height: 1, color: AppColors.neutralBorder),
           ],
 
+          // Origin Filter Bar: All, Parent-Assigned, AI-Assigned
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            color: AppColors.neutralBg,
+            child: Row(
+              children: [
+                _buildOriginFilterChip(
+                  label: 'All (${activeTasks.length})',
+                  value: 'all',
+                  icon: Icons.list_alt_rounded,
+                ),
+                const SizedBox(width: 6),
+                _buildOriginFilterChip(
+                  label: '🏡 Parent (${activeTasks.where((t) => t.source != MissionSource.localAi && t.type != MissionType.localAi).length})',
+                  value: 'parent',
+                  icon: Icons.home_rounded,
+                ),
+                const SizedBox(width: 6),
+                _buildOriginFilterChip(
+                  label: '🤖 AI (${activeTasks.where((t) => t.source == MissionSource.localAi || t.type == MissionType.localAi).length})',
+                  value: 'ai',
+                  icon: Icons.smart_toy_rounded,
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1, color: AppColors.neutralBorder),
+
           Expanded(
             child: TabBarView(
               controller: _tabController,
@@ -445,21 +474,12 @@ class _ParentTasksScreenState extends ConsumerState<ParentTasksScreen>
                           icon: Icons.nature_people_rounded,
                           title: 'No Active Activities',
                           description:
-                              'Assign real-world offline tasks like reading, outdoor play, helping out, or exercise to help your child disconnect from screens.',
+                              'Assign real-world offline tasks or let on-device AI generate counterbalance missions based on your child\'s screen time.',
                           actionLabel: 'Assign Activity',
                           onAction: () =>
                               _openCreateTaskDialog(context, parentState),
                         )
-                      : ListView.builder(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 18, vertical: 14),
-                          itemCount: activeTasks.length,
-                          itemBuilder: (context, index) {
-                            final task = activeTasks[index];
-                            return _buildTaskCard(context, parentState, task,
-                                isHistory: false);
-                          },
-                        ),
+                      : _buildSectionedTasksList(context, parentState, activeTasks, isHistory: false),
                 ),
 
                 // Tab 2: Completed Tasks History
@@ -476,16 +496,7 @@ class _ParentTasksScreenState extends ConsumerState<ParentTasksScreen>
                           description:
                               'When your children complete and you approve their offline activities, they will appear here.',
                         )
-                      : ListView.builder(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 18, vertical: 14),
-                          itemCount: completedTasks.length,
-                          itemBuilder: (context, index) {
-                            final task = completedTasks[index];
-                            return _buildTaskCard(context, parentState, task,
-                                isHistory: true);
-                          },
-                        ),
+                      : _buildSectionedTasksList(context, parentState, completedTasks, isHistory: true),
                 ),
               ],
             ),
@@ -502,10 +513,212 @@ class _ParentTasksScreenState extends ConsumerState<ParentTasksScreen>
     );
   }
 
+  Widget _buildOriginFilterChip({
+    required String label,
+    required String value,
+    required IconData icon,
+  }) {
+    final isSelected = _missionTypeFilter == value;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _missionTypeFilter = value),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          decoration: BoxDecoration(
+            color: isSelected ? AppColors.parentPrimary : Colors.white,
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+            border: Border.all(
+              color: isSelected ? AppColors.parentPrimary : AppColors.neutralBorder,
+            ),
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: AppColors.parentPrimary.withAlpha((0.2 * 255).round()),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 14,
+                color: isSelected ? Colors.white : AppColors.parentTextSecondary,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                  color: isSelected ? Colors.white : AppColors.parentTextDark,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionedTasksList(
+    BuildContext context,
+    ParentDashboardState parentState,
+    List<ChildMission> tasks, {
+    required bool isHistory,
+  }) {
+    final parentMissions = tasks
+        .where((t) =>
+            t.source != MissionSource.localAi && t.type != MissionType.localAi)
+        .toList();
+    final aiMissions = tasks
+        .where((t) =>
+            t.source == MissionSource.localAi || t.type == MissionType.localAi)
+        .toList();
+
+    if (_missionTypeFilter == 'parent') {
+      if (parentMissions.isEmpty) {
+        return const Center(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Text('No parent-assigned missions found.'),
+          ),
+        );
+      }
+      return ListView.builder(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+        itemCount: parentMissions.length,
+        itemBuilder: (ctx, i) => _buildTaskCard(ctx, parentState, parentMissions[i], isHistory: isHistory),
+      );
+    }
+
+    if (_missionTypeFilter == 'ai') {
+      if (aiMissions.isEmpty) {
+        return const Center(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Text('No AI-generated missions found.'),
+          ),
+        );
+      }
+      return ListView.builder(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+        itemCount: aiMissions.length,
+        itemBuilder: (ctx, i) => _buildTaskCard(ctx, parentState, aiMissions[i], isHistory: isHistory),
+      );
+    }
+
+    // Default: 'all' -> Render Distinct Visual Sections
+    return ListView(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      children: [
+        if (parentMissions.isNotEmpty) ...[
+          _buildMissionSectionHeader(
+            title: '🏡 Parent-Assigned Real-World Missions',
+            subtitle: 'Offline activities, chores, and study goals assigned by parents',
+            count: parentMissions.length,
+            color: AppColors.parentPrimary,
+            icon: Icons.home_rounded,
+          ),
+          const SizedBox(height: 10),
+          ...parentMissions.map((task) => _buildTaskCard(context, parentState, task, isHistory: isHistory)),
+          const SizedBox(height: 16),
+        ],
+        if (aiMissions.isNotEmpty) ...[
+          _buildMissionSectionHeader(
+            title: '🤖 AI-Assigned Autonomous Missions',
+            subtitle: 'Auto-generated on-device by AI to counterbalance screen time',
+            count: aiMissions.length,
+            color: const Color(0xFF6366F1), // Indigo accent
+            icon: Icons.smart_toy_rounded,
+          ),
+          const SizedBox(height: 10),
+          ...aiMissions.map((task) => _buildTaskCard(context, parentState, task, isHistory: isHistory)),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildMissionSectionHeader({
+    required String title,
+    required String subtitle,
+    required int count,
+    required Color color,
+    required IconData icon,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withAlpha((0.08 * 255).round()),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: color.withAlpha((0.25 * 255).round())),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: color.withAlpha((0.15 * 255).round()),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: color, size: 16),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 13,
+                        color: color,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: color,
+                        borderRadius: BorderRadius.circular(AppRadius.pill),
+                      ),
+                      child: Text(
+                        '$count',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    fontSize: 10.5,
+                    color: AppColors.neutralMuted,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildTaskCard(BuildContext context, ParentDashboardState parentState,
       ChildMission task, {required bool isHistory}) {
     final dateFormat = DateFormat('MMM d, h:mm a');
     final isPendingReview = task.status == MissionStatus.submitted;
+    final isAi = task.source == MissionSource.localAi || task.type == MissionType.localAi;
 
     return AppCard(
       margin: const EdgeInsets.only(bottom: 14),
@@ -513,11 +726,52 @@ class _ParentTasksScreenState extends ConsumerState<ParentTasksScreen>
           ? AppColors.warningOrange
           : isHistory
               ? AppColors.successGreen.withAlpha((0.5 * 255).round())
-              : AppColors.neutralBorder,
-      borderWidth: isPendingReview ? 1.5 : 1.0,
+              : isAi
+                  ? const Color(0xFF6366F1).withAlpha((0.5 * 255).round())
+                  : AppColors.parentPrimary.withAlpha((0.4 * 255).round()),
+      borderWidth: isPendingReview || isAi ? 1.5 : 1.0,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Origin Banner Chip
+          Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: isAi
+                  ? const Color(0xFF6366F1).withAlpha((0.12 * 255).round())
+                  : AppColors.parentPrimary.withAlpha((0.1 * 255).round()),
+              borderRadius: BorderRadius.circular(AppRadius.xs),
+              border: Border.all(
+                color: isAi
+                    ? const Color(0xFF6366F1).withAlpha((0.3 * 255).round())
+                    : AppColors.parentPrimary.withAlpha((0.25 * 255).round()),
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  isAi ? Icons.auto_awesome_rounded : Icons.home_rounded,
+                  size: 13,
+                  color: isAi ? const Color(0xFF6366F1) : AppColors.parentPrimary,
+                ),
+                const SizedBox(width: 5),
+                Text(
+                  isAi
+                      ? '🤖 AI-ASSIGNED • USAGESTATS AUTONOMOUS MISSION'
+                      : '🏡 PARENT-ASSIGNED • REAL-WORLD MISSION',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    color: isAi ? const Color(0xFF6366F1) : AppColors.parentPrimary,
+                    letterSpacing: 0.3,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
           // Top Row: Category & Status Chip + Child Nickname + Actions
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -527,13 +781,14 @@ class _ParentTasksScreenState extends ConsumerState<ParentTasksScreen>
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                      color: AppColors.parentPrimary.withAlpha((0.12 * 255).round()),
+                      color: (isAi ? const Color(0xFF6366F1) : AppColors.parentPrimary)
+                          .withAlpha((0.12 * 255).round()),
                       borderRadius: BorderRadius.circular(AppRadius.xs),
                     ),
                     child: Text(
                       '${task.targetMinutes} min',
-                      style: const TextStyle(
-                        color: AppColors.parentPrimary,
+                      style: TextStyle(
+                        color: isAi ? const Color(0xFF6366F1) : AppColors.parentPrimary,
                         fontSize: 11,
                         fontWeight: FontWeight.w800,
                       ),

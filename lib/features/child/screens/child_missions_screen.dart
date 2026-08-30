@@ -71,6 +71,9 @@ class _ChildMissionsScreenState extends ConsumerState<ChildMissionsScreen> {
         title: idea.title,
         description: idea.description,
         targetMinutes: idea.targetMinutes,
+        childId: childProfile?.id,
+        childNickname: childProfile?.nickname,
+        familyId: childProfile?.familyId,
       );
 
       final updatedMissions =
@@ -200,6 +203,44 @@ class _ChildMissionsScreenState extends ConsumerState<ChildMissionsScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
+                              // Origin Badge
+                              Container(
+                                margin: const EdgeInsets.only(bottom: 8),
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: (mission.source == MissionSource.localAi || mission.type == MissionType.localAi)
+                                      ? const Color(0xFF6366F1).withAlpha((0.12 * 255).round())
+                                      : AppColors.childPrimary.withAlpha((0.12 * 255).round()),
+                                  borderRadius: BorderRadius.circular(AppRadius.xs),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      (mission.source == MissionSource.localAi || mission.type == MissionType.localAi)
+                                          ? Icons.auto_awesome_rounded
+                                          : Icons.family_restroom_rounded,
+                                      size: 13,
+                                      color: (mission.source == MissionSource.localAi || mission.type == MissionType.localAi)
+                                          ? const Color(0xFF6366F1)
+                                          : AppColors.childPrimary,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      (mission.source == MissionSource.localAi || mission.type == MissionType.localAi)
+                                          ? '🤖 AI Agent Mission'
+                                          : '🏡 From Mom & Dad',
+                                      style: TextStyle(
+                                        fontSize: 10.5,
+                                        fontWeight: FontWeight.w800,
+                                        color: (mission.source == MissionSource.localAi || mission.type == MissionType.localAi)
+                                            ? const Color(0xFF6366F1)
+                                            : AppColors.childPrimary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                               Row(
                                 mainAxisAlignment:
                                     MainAxisAlignment.spaceBetween,

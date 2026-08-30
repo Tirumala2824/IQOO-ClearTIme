@@ -88,6 +88,9 @@ class SupabaseMissionRepository implements LocalMissionRepository {
     String description = '',
     int targetMinutes = 30,
     DateTime? dueDate,
+    String? childId,
+    String? childNickname,
+    String? familyId,
   }) async {
     final response = await _requireClient.rpc('create_local_ai_mission', params: {
       'p_title': title.trim(),

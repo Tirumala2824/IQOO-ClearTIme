@@ -173,18 +173,28 @@ class ParentAIContextBuilder {
       }
     }
 
-    // 5. INSTRUCTIONS TO LLM
+    // 5. CLEARTIME APP FEATURE ENCYCLOPEDIA (FOR ANSWERING USER QUESTIONS ABOUT APP FEATURES)
+    buffer.writeln('\n=== CLEARTIME APP FEATURE KNOWLEDGE BASE ===');
+    buffer.writeln('- 🏡 Parent-Assigned Real-World Missions: Offline activities, chores, and study tasks assigned directly by parents. Parents can require photo/note/timer proof and manually review/approve submissions.');
+    buffer.writeln('- 🤖 AI-Assigned Autonomous Missions: Offline missions created dynamically by on-device AI based on live Android usage stats to counterbalance entertainment/gaming screen time.');
+    buffer.writeln('- 📊 Mindful Reports & Summaries: Private on-device aggregation of weekly/daily trends, focus balance, and offline achievements.');
+    buffer.writeln('- ⏱️ Downtime & Triggers: Configurable screen limits and mindful break triggers that encourage children to take eye and movement pauses.');
+    buffer.writeln('- 🛡️ 100% On-Device AI Privacy: All AI inference runs locally on the phone (GGUF / Llama runtime). Zero telemetry or raw usage is sent to external servers.');
+
+    // 6. INSTRUCTIONS TO LLM (DYNAMIC NON-STATIC REASONING)
     buffer.writeln('\n=== ASSISTANT INSTRUCTIONS ===');
     buffer.writeln(
-        '1. You are ClearTime\'s On-Device Parent AI Assistant. You have full visibility into the child\'s real-world offline activities, screen time habits, and wellbeing goals.');
+        '1. You are ClearTime\'s On-Device Parent AI Assistant. You possess complete visibility into the child\'s real-world offline activities, screen time habits, wellbeing goals, and app capabilities.');
     buffer.writeln(
-        '2. When the parent asks what tasks/activities their child did yesterday or today, answer directly using the actual completed activity names from the context (e.g., "Yesterday, ${child.nickname} finished the Dancing Challenge").');
+        '2. When the parent asks about app features (e.g. how missions work, what focus time is, how privacy works), explain clearly and concisely using the feature knowledge base.');
     buffer.writeln(
-        '3. When the parent asks what task or activity to give today or tomorrow, give an engaging, creative, healthy offline suggestion (such as going outside to play cricket in the park, bike riding, drawing, reading, or playing sports).');
+        '3. When the parent asks what tasks their child did yesterday or today, answer directly citing the actual completed activities from the history.');
     buffer.writeln(
-        '4. Maintain a warm, encouraging, conversational tone that helps parents support their child\'s healthy digital balance.');
+        '4. When the parent asks "how to improve", "how to balance screen time", or requests suggestions, dynamically synthesize actionable, compassionate, and age-appropriate parenting advice and offline activity ideas based on today\'s specific screen time numbers.');
     buffer.writeln(
-        '5. Format your output cleanly with concise bullet points and bold highlights.');
+        '5. Maintain a warm, encouraging, conversational tone that empowers parents to nurture healthy digital habits with their children.');
+    buffer.writeln(
+        '6. Format responses cleanly with bold key points and bullet lists.');
 
     if (customQuery != null && customQuery.trim().isNotEmpty) {
       buffer.writeln('\n=== PARENT QUESTION ===');

@@ -37,6 +37,9 @@ class AppRoutes {
   static const String childSettings = '/child/settings';
   static const String childJoinFamily = '/child/join';
   static const String childAiSettings = '/child/settings/ai';
+  static const String childModelManager = '/child/settings/ai/models';
+  static const String childPromptManager = '/child/settings/ai/prompts';
+  static const String childAiDiagnostics = '/child/settings/ai/diagnostics';
   static const String childPrivacyCenter = '/child/settings/privacy';
   static const String usageAccessSetup = '/usage-access-setup';
 }

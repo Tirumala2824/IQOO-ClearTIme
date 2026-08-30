@@ -16,13 +16,17 @@ class ChildShellScreen extends StatelessWidget {
         location.startsWith(AppRoutes.childMissions)) {
       return 1;
     }
-    if (location.startsWith(AppRoutes.childProgress) ||
-        location.startsWith(AppRoutes.childInsights)) {
+    if (location.startsWith(AppRoutes.childAi)) {
       return 2;
     }
-    if (location.startsWith(AppRoutes.childSettings) ||
-        location.startsWith(AppRoutes.childPrivacyCenter)) {
+    if (location.startsWith(AppRoutes.childProgress) ||
+        location.startsWith(AppRoutes.childInsights)) {
       return 3;
+    }
+    if (location.startsWith(AppRoutes.childSettings) ||
+        location.startsWith(AppRoutes.childAiSettings) ||
+        location.startsWith(AppRoutes.childPrivacyCenter)) {
+      return 4;
     }
     return 0;
   }
@@ -33,12 +37,15 @@ class ChildShellScreen extends StatelessWidget {
         context.go(AppRoutes.child);
         break;
       case 1:
-        context.go(AppRoutes.childGoals);
+        context.go(AppRoutes.childMissions);
         break;
       case 2:
-        context.go(AppRoutes.childProgress);
+        context.go(AppRoutes.childAi);
         break;
       case 3:
+        context.go(AppRoutes.childProgress);
+        break;
+      case 4:
         context.go(AppRoutes.childSettings);
         break;
     }
@@ -68,13 +75,18 @@ class ChildShellScreen extends StatelessWidget {
             label: 'Activities',
           ),
           NavigationDestination(
+            icon: Icon(Icons.smart_toy_outlined),
+            selectedIcon: Icon(Icons.smart_toy_rounded, color: AppColors.childSecondary),
+            label: 'AI Assistant',
+          ),
+          NavigationDestination(
             icon: Icon(Icons.emoji_events_outlined),
             selectedIcon: Icon(Icons.emoji_events_rounded, color: AppColors.childSecondary),
             label: 'Progress',
           ),
           NavigationDestination(
-            icon: Icon(Icons.person_outline_rounded),
-            selectedIcon: Icon(Icons.person_rounded, color: AppColors.childSecondary),
+            icon: Icon(Icons.tune_rounded),
+            selectedIcon: Icon(Icons.settings_rounded, color: AppColors.childSecondary),
             label: 'Profile',
           ),
         ],

@@ -16,6 +16,9 @@ abstract class LocalMissionRepository {
     String description = '',
     int targetMinutes = 30,
     DateTime? dueDate,
+    String? childId,
+    String? childNickname,
+    String? familyId,
   });
   Future<void> startMission(String id, {String? childId});
   Future<void> submitMission(
@@ -109,6 +112,9 @@ class InMemoryLocalMissionRepository implements LocalMissionRepository {
     String description = '',
     int targetMinutes = 30,
     DateTime? dueDate,
+    String? childId,
+    String? childNickname,
+    String? familyId,
   }) async {
     final now = DateTime.now();
     final mission = ChildMission(
@@ -117,6 +123,8 @@ class InMemoryLocalMissionRepository implements LocalMissionRepository {
       description: description,
       source: MissionSource.localAi,
       type: MissionType.localAi,
+      assignedToChildId: childId,
+      assignedToChildNickname: childNickname,
       targetMinutes: targetMinutes,
       status: MissionStatus.assigned,
       dueDate: dueDate,

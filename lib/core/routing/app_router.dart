@@ -131,6 +131,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const LocalAiSettingsScreen(),
       ),
       GoRoute(
+        path: AppRoutes.childModelManager,
+        builder: (context, state) => const ModelManagerScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.childPromptManager,
+        builder: (context, state) => const PromptManagerScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.childAiDiagnostics,
+        builder: (context, state) => const AiDiagnosticsScreen(),
+      ),
+      GoRoute(
         path: AppRoutes.usageAccessSetup,
         builder: (context, state) => const UsageAccessSetupScreen(),
       ),

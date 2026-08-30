@@ -115,8 +115,12 @@ class ChildAiCoachController extends StateNotifier<ChildAiCoachState> {
             title: reply.agentAction!.title,
             description: reply.agentAction!.description,
             targetMinutes: reply.agentAction!.targetMinutes ?? 20,
+            childId: dashState.profile?.id,
+            childNickname: dashState.profile?.nickname,
+            familyId: dashState.family?.id,
           );
-          final updatedMissions = await missionRepo.getMissions();
+          final updatedMissions =
+              await missionRepo.getMissions(childId: dashState.profile?.id);
           _ref
               .read(childDashboardControllerProvider.notifier)
               .updateMissionsLocally(updatedMissions);

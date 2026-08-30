@@ -445,13 +445,14 @@ class ParentAIService {
     }
   }
 
-  /// Preset suggested queries for parents.
+  /// Preset suggested queries for parents covering workflow, feature explanations, and improvement guidance.
   static const List<String> suggestedParentQueries = [
+    'How do Parent Missions vs AI Missions work?',
+    'How can I improve my child\'s screen balance?',
     'What tasks did my child complete yesterday?',
-    'What activity should I assign today?',
+    'Suggest a fun offline activity for today',
+    'How does 100% on-device AI privacy work?',
     'How is today\'s screen time and focus balance?',
-    'What wellbeing goals are in progress?',
-    'Suggest a fun outdoor weekend activity',
-    'What habit routines improved this week?',
+    'What wellbeing goals are currently active?',
   ];
 }

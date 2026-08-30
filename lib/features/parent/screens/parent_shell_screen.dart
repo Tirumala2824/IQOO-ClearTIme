@@ -13,11 +13,17 @@ class ParentShellScreen extends StatelessWidget {
     final String location = GoRouterState.of(context).matchedLocation;
     if (location == AppRoutes.parent) return 0;
     if (location.startsWith(AppRoutes.parentTasks)) return 1;
-    if (location.startsWith(AppRoutes.parentChildren)) return 2;
-    if (location.startsWith(AppRoutes.parentReports)) return 3;
+    if (location.startsWith(AppRoutes.parentAi)) return 2;
+    if (location.startsWith(AppRoutes.parentReports) ||
+        location.startsWith(AppRoutes.parentReportCompare) ||
+        location.startsWith(AppRoutes.parentReportDetail)) {
+      return 3;
+    }
     if (location.startsWith(AppRoutes.parentSettings) ||
+        location.startsWith(AppRoutes.localAiSettings) ||
+        location.startsWith(AppRoutes.parentChildren) ||
         location.startsWith(AppRoutes.parentTriggers) ||
-        location.startsWith(AppRoutes.parentAi)) {
+        location.startsWith(AppRoutes.parentPrivacyCenter)) {
       return 4;
     }
     return 0;
@@ -32,7 +38,7 @@ class ParentShellScreen extends StatelessWidget {
         context.go(AppRoutes.parentTasks);
         break;
       case 2:
-        context.go(AppRoutes.parentChildren);
+        context.go(AppRoutes.parentAi);
         break;
       case 3:
         context.go(AppRoutes.parentReports);
@@ -67,9 +73,9 @@ class ParentShellScreen extends StatelessWidget {
             label: 'Activities',
           ),
           NavigationDestination(
-            icon: Icon(Icons.people_outline_rounded),
-            selectedIcon: Icon(Icons.people_rounded, color: AppColors.parentPrimary),
-            label: 'Children',
+            icon: Icon(Icons.psychology_outlined),
+            selectedIcon: Icon(Icons.psychology_rounded, color: AppColors.parentPrimary),
+            label: 'AI Assistant',
           ),
           NavigationDestination(
             icon: Icon(Icons.assessment_outlined),

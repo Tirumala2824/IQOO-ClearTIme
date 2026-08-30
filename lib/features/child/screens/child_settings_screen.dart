@@ -284,7 +284,98 @@ class _ChildSettingsScreenState extends ConsumerState<ChildSettingsScreen> {
 
           const SizedBox(height: 16),
 
-          // 3. Plain Language Privacy Card
+          // 3. Local AI Engine & Control Center (Replicated from Parent)
+          const Text(
+            'Local AI Engine & Control Center 🤖',
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: 15,
+              color: AppColors.childTextDark,
+            ),
+          ),
+          const SizedBox(height: 8),
+          AppCard(
+            padding: EdgeInsets.zero,
+            child: Column(
+              children: [
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF6366F1).withAlpha((0.12 * 255).round()),
+                      borderRadius: BorderRadius.circular(AppRadius.sm),
+                    ),
+                    child: const Icon(Icons.psychology_rounded,
+                        color: Color(0xFF6366F1), size: 22),
+                  ),
+                  title: const Text('Local AI Engine Settings',
+                      style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5)),
+                  subtitle: const Text('Configure on-device SLM parameters, tokens & offline modes',
+                      style: TextStyle(color: AppColors.neutralMuted, fontSize: 12)),
+                  trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.neutralMuted),
+                  onTap: () => context.push(AppRoutes.childAiSettings),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.childPrimary.withAlpha((0.12 * 255).round()),
+                      borderRadius: BorderRadius.circular(AppRadius.sm),
+                    ),
+                    child: const Icon(Icons.memory_rounded,
+                        color: AppColors.childPrimary, size: 22),
+                  ),
+                  title: const Text('Model Manager',
+                      style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5)),
+                  subtitle: const Text('View on-device weights, GGUF/NPU speed & memory footprint',
+                      style: TextStyle(color: AppColors.neutralMuted, fontSize: 12)),
+                  trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.neutralMuted),
+                  onTap: () => context.push(AppRoutes.childModelManager),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.childSecondary.withAlpha((0.12 * 255).round()),
+                      borderRadius: BorderRadius.circular(AppRadius.sm),
+                    ),
+                    child: const Icon(Icons.edit_note_rounded,
+                        color: AppColors.childSecondary, size: 22),
+                  ),
+                  title: const Text('Prompt Template Manager',
+                      style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5)),
+                  subtitle: const Text('Inspect and customize coaching & mission prompt templates',
+                      style: TextStyle(color: AppColors.neutralMuted, fontSize: 12)),
+                  trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.neutralMuted),
+                  onTap: () => context.push(AppRoutes.childPromptManager),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.warningOrange.withAlpha((0.12 * 255).round()),
+                      borderRadius: BorderRadius.circular(AppRadius.sm),
+                    ),
+                    child: const Icon(Icons.speed_rounded,
+                        color: AppColors.warningOrange, size: 22),
+                  ),
+                  title: const Text('AI Diagnostics & Hardware Benchmark',
+                      style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5)),
+                  subtitle: const Text('Run real-time tokens/sec and latency benchmarks',
+                      style: TextStyle(color: AppColors.neutralMuted, fontSize: 12)),
+                  trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.neutralMuted),
+                  onTap: () => context.push(AppRoutes.childAiDiagnostics),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // 4. Plain Language Privacy Card
           AppCard(
             borderColor: AppColors.childSecondary.withAlpha((0.4 * 255).round()),
             child: const Column(
@@ -315,7 +406,7 @@ class _ChildSettingsScreenState extends ConsumerState<ChildSettingsScreen> {
 
           const SizedBox(height: 16),
 
-          // 4. Notification Preferences
+          // 5. Notification Preferences
           const Text(
             'Preferences ⚙️',
             style: TextStyle(

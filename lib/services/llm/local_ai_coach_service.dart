@@ -2,8 +2,10 @@ import '../../core/services/abstractions/local_llm_provider.dart';
 import '../../data/models/llm_models.dart';
 import '../../data/models/mission_model.dart';
 import '../../data/models/goal_model.dart';
+import '../../data/models/usage_models.dart';
 import '../../data/repositories/local_prompt_repository.dart';
 import '../../data/repositories/local_ai_settings_repository.dart';
+import 'ai_mission_generator_service.dart';
 import 'local_ai_context_builder.dart';
 import 'prompt_template_engine.dart';
 import 'ai_response_validator.dart';
@@ -149,68 +151,57 @@ class LocalAICoachService {
 
     final qLower = question.toLowerCase();
 
-    // 1. Mission Creation Agent Action
+    // 1. Dynamic Mission Creation Request
     if (qLower.contains('challenge') ||
         qLower.contains('new mission') ||
         qLower.contains('give me a mission') ||
         qLower.contains('suggest an activity') ||
         qLower.contains('offline activity')) {
-      final ideas = [
-        {
-          'title': 'Origami & Drawing Quest',
-          'desc': 'Fold 2 origami animals or sketch your favorite character.',
-          'duration': 20,
-        },
-        {
-          'title': 'Outdoor Fresh-Air Sprint',
-          'desc': 'Step outside, stretch, or jog around the yard for 20 minutes.',
-          'duration': 20,
-        },
-        {
-          'title': 'LEGO Castle Architect',
-          'desc': 'Construct a castle, tower, or car with blocks without any screens.',
-          'duration': 30,
-        },
-        {
-          'title': 'Book Reading Exploration',
-          'desc': 'Read 15 pages of your current favorite story or graphic novel.',
-          'duration': 25,
-        },
-        {
-          'title': 'Mindful Eye Rest & Puzzle',
-          'desc': 'Solve a physical jigsaw puzzle or play a board game with family.',
-          'duration': 20,
-        },
-      ];
-      final chosen = (ideas..shuffle()).first;
+      try {
+        final generator = AiMissionGeneratorService(llmProvider: _llmProvider);
+        final dynamicIdea = await generator.generateMissionForChild(
+          childNickname: name,
+          usage: UsageSummary(
+            totalMinutes: context.todayUsageMinutes,
+            focusMinutes: context.focusMinutes,
+            breakCount: context.breakCount,
+            screenUnlockCount: 10,
+            changePercentageFromYesterday: context.usageChangePercentage,
+          ),
+          requestTheme: question,
+        );
 
-      return ChatMessage(
-        id: 'agent-${now.millisecondsSinceEpoch}',
-        text: 'Awesome $name! 🌟 I generated a fun offline mission for you: **${chosen['title']}** (${chosen['duration']} mins). Ready to take on the challenge?',
-        isUser: false,
-        timestamp: now,
-        agentAction: ChildAgentAction(
-          type: ChildAgentActionType.missionCreated,
-          title: chosen['title'] as String,
-          description: chosen['desc'] as String,
-          targetMinutes: chosen['duration'] as int,
-        ),
-      );
+        return ChatMessage(
+          id: 'agent-${now.millisecondsSinceEpoch}',
+          text: 'Awesome $name! 🌟 I generated a custom offline mission for you based on today\'s balance: **${dynamicIdea.title}** (${dynamicIdea.targetMinutes} mins). Ready to take on the challenge?',
+          isUser: false,
+          timestamp: now,
+          agentAction: ChildAgentAction(
+            type: ChildAgentActionType.missionCreated,
+            title: dynamicIdea.title,
+            description: dynamicIdea.description,
+            targetMinutes: dynamicIdea.targetMinutes,
+          ),
+        );
+      } catch (_) {
+        // Safe fallback
+      }
     }
 
     // 2. Focus Challenge Action
     if (qLower.contains('help me focus') ||
         qLower.contains('focus challenge') ||
-        qLower.contains('focus timer')) {
+        qLower.contains('focus timer') ||
+        qLower.contains('focus sprint')) {
       return ChatMessage(
         id: 'agent-${now.millisecondsSinceEpoch}',
-        text: 'Let\'s get in the zone, $name! 🎯 I\'ve activated a 15-minute Deep Focus Sprint. Put away background noise and let\'s conquer this goal!',
+        text: 'Let\'s get in the zone, $name! 🎯 I\'ve activated a 15-minute Deep Focus Sprint. Put away background distractions and let\'s conquer this!',
         isUser: false,
         timestamp: now,
         agentAction: const ChildAgentAction(
           type: ChildAgentActionType.focusChallengeCreated,
           title: '15-Minute Focus Sprint',
-          description: 'Focus on one learning or creative task with zero distraction.',
+          description: 'Focus on one learning, reading, or creative task with zero distraction.',
           targetMinutes: 15,
         ),
       );
@@ -240,7 +231,7 @@ class LocalAICoachService {
       );
     }
 
-    // 4. Conversational guidance using on-device LLM
+    // 4. Conversational guidance & feature explanations using on-device LLM
     final structured = await askCoach(
       question: question,
       context: context,
@@ -256,11 +247,12 @@ class LocalAICoachService {
     );
   }
 
-  /// Suggested prompt queries for the child.
+  /// Suggested prompt queries for the child covering features, improvements, and activities.
   static const List<String> suggestedPrompts = [
     '✨ Give me a mission challenge',
+    '💡 How can I improve my score?',
+    '❓ How do Parent vs AI missions work?',
     '🎯 Help me focus for 15 mins',
-    '💡 Break down my activity',
     '📊 How did I do today?',
     '🧘 Suggest a quick screen break',
   ];

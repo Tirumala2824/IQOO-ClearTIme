@@ -120,21 +120,28 @@ class AiMissionGeneratorService {
     return _getRandomFallbacks(count);
   }
 
-  /// Generates a single personalized mission for a child on-demand.
+  /// Generates a single personalized mission for a child on-demand driven by Android usage stats.
   Future<GeneratedMissionIdea> generateMissionForChild({
     required String childNickname,
     UsageSummary? usage,
     String? requestTheme,
   }) async {
     final screenMins = usage?.totalMinutes ?? 0;
+    final focusMins = usage?.focusMinutes ?? 0;
+    final topCats = usage?.categories.map((c) => '${c.category} (${c.totalMinutes}m)').join(', ') ?? '';
+
     final prompt = StringBuffer();
     prompt.writeln('You are ClearTime AI Buddy, an encouraging on-device buddy for $childNickname.');
-    prompt.writeln('Create one fun, exciting screen-free challenge mission.');
+    prompt.writeln('Create one fun, exciting screen-free offline challenge mission designed to counterbalance today\'s screen time.');
     if (requestTheme != null && requestTheme.isNotEmpty) {
-      prompt.writeln('Special Theme requested: $requestTheme');
+      prompt.writeln('Requested Theme or User Context: $requestTheme');
     }
-    prompt.writeln('Today\'s screen time: $screenMins min.');
-    prompt.writeln('Respond ONLY with a JSON object: {"title": string, "description": string, "targetMinutes": int, "suggestedReward": string, "category": string}');
+    prompt.writeln('Today\'s Screen Time: $screenMins min (Focus: $focusMins min).');
+    if (topCats.isNotEmpty) {
+      prompt.writeln('Today\'s Top App Categories: $topCats');
+    }
+    prompt.writeln('Respond ONLY with a valid JSON object with keys: "title", "description", "targetMinutes" (int between 15 and 45), "suggestedReward" (string), "category" (e.g. Outdoor, Creativity, Health, Focus, Family).');
+    prompt.writeln('Example: {"title": "Backyard Obstacle Dash", "description": "Set up a 3-station obstacle course outside and complete 5 laps.", "targetMinutes": 20, "suggestedReward": "15 min bonus playtime", "category": "Outdoor & Health"}');
 
     try {
       final isAvailable = await _llmProvider.isAvailable();
