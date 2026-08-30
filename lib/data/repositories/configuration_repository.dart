@@ -45,9 +45,12 @@ class SupabaseConfigurationRepository implements ConfigurationRepository {
           .eq('family_id', familyId)
           .order('created_at', ascending: true);
 
-      return (response as List)
-          .map((e) => ReportConfiguration.fromJson(e as Map<String, dynamic>))
-          .toList();
+      final Map<String, ReportConfiguration> unique = {};
+      for (final json in (response as List)) {
+        final cfg = ReportConfiguration.fromJson(json as Map<String, dynamic>);
+        unique[cfg.id] = cfg;
+      }
+      return unique.values.toList();
     } on PostgrestException catch (e) {
       throw AppDatabaseException(
           'Error loading report configurations: ${e.message}');
@@ -120,9 +123,12 @@ class SupabaseConfigurationRepository implements ConfigurationRepository {
           .eq('family_id', familyId)
           .order('created_at', ascending: true);
 
-      return (response as List)
-          .map((e) => TriggerConfiguration.fromJson(e as Map<String, dynamic>))
-          .toList();
+      final Map<String, TriggerConfiguration> unique = {};
+      for (final json in (response as List)) {
+        final cfg = TriggerConfiguration.fromJson(json as Map<String, dynamic>);
+        unique[cfg.id] = cfg;
+      }
+      return unique.values.toList();
     } on PostgrestException catch (e) {
       throw AppDatabaseException(
           'Error loading trigger configurations: ${e.message}');
@@ -256,7 +262,7 @@ class SupabaseConfigurationRepository implements ConfigurationRepository {
         ..['updated_at'] = DateTime.now().toIso8601String();
       final response = await _client
           .from('privacy_settings')
-          .upsert(payload)
+          .upsert(payload, onConflict: 'family_id, user_id')
           .select()
           .single();
 

@@ -24,13 +24,13 @@ Future<VerifiedModelArtifact> installModel({
   required http.Client client,
   void Function(double progress)? onProgress,
 }) async {
-  final model = manifest.models.firstWhere(
-    (m) => m.id == modelId,
-    orElse: () => throw LocalModelUnavailableException(
+  final model = manifest.models.where((m) => m.id == modelId).firstOrNull;
+  if (model == null) {
+    throw LocalModelUnavailableException(
       ModelRuntimeStatus.error,
       'Model "$modelId" is not in the signed catalog.',
-    ),
-  );
+    );
+  }
   final artifact = model.artifacts[platformKey];
   if (artifact == null) {
     throw LocalModelUnavailableException(

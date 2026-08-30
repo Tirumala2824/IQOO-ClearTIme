@@ -156,9 +156,12 @@ class SupabaseMissionRepository implements LocalMissionRepository {
             .eq('assigned_to_child_id', targetChildId)
             .order('created_at', ascending: false);
         if ((rows as List).isNotEmpty) {
-          return rows
-              .map((row) => _mission(Map<String, dynamic>.from(row as Map)))
-              .toList();
+          final Map<String, ChildMission> unique = {};
+          for (final row in (rows as List)) {
+            final m = _mission(Map<String, dynamic>.from(row as Map));
+            unique[m.id] = m;
+          }
+          return unique.values.toList();
         }
       }
 
@@ -175,9 +178,12 @@ class SupabaseMissionRepository implements LocalMissionRepository {
             .select()
             .eq('assigned_to_child_id', resolvedId)
             .order('created_at', ascending: false);
-        return (rows as List)
-            .map((row) => _mission(Map<String, dynamic>.from(row as Map)))
-            .toList();
+        final Map<String, ChildMission> unique = {};
+        for (final row in (rows as List)) {
+          final m = _mission(Map<String, dynamic>.from(row as Map));
+          unique[m.id] = m;
+        }
+        return unique.values.toList();
       }
     } catch (_) {}
 
@@ -203,9 +209,12 @@ class SupabaseMissionRepository implements LocalMissionRepository {
 
     try {
       final rows = await query.order('created_at', ascending: false);
-      return (rows as List)
-          .map((row) => _mission(Map<String, dynamic>.from(row as Map)))
-          .toList();
+      final Map<String, ChildMission> unique = {};
+      for (final row in (rows as List)) {
+        final m = _mission(Map<String, dynamic>.from(row as Map));
+        unique[m.id] = m;
+      }
+      return unique.values.toList();
     } catch (_) {
       return const [];
     }
@@ -278,9 +287,12 @@ class SupabaseMissionRepository implements LocalMissionRepository {
   Future<void> deleteMission(String id) async {
     final client = _safeClient;
     if (client == null || client.auth.currentUser == null) return;
-    // 1. Delete associated rewards
+    // 1. Delete associated mission lifecycle events and rewards
     try {
-      await client.from('rewards').delete().eq('task_id', id);
+      await client.from('mission_lifecycle_events').delete().eq('mission_id', id);
+    } catch (_) {}
+    try {
+      await client.from('mission_rewards').delete().eq('mission_id', id);
     } catch (_) {}
     // 2. Delete mission
     try {

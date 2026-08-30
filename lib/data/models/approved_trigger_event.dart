@@ -36,10 +36,10 @@ class ApprovedTriggerEvent {
       notificationId: json['notification_id'] as String? ?? '',
       familyId: json['family_id'] as String? ?? '',
       childId: json['child_id'] as String? ?? '',
-      triggerType: TriggerType.values.firstWhere(
-        (t) => t.name == json['trigger_type'],
-        orElse: () => TriggerType.usageIncrease,
-      ),
+      triggerType: TriggerType.values
+              .where((t) => t.name == json['trigger_type'])
+              .firstOrNull ??
+          TriggerType.usageIncrease,
       threshold: (json['threshold'] as num?)?.toDouble() ?? 0.0,
       observedValue: (json['observed_value'] as num?)?.toDouble() ?? 0.0,
       title: json['title'] as String? ?? 'Wellbeing Notification',

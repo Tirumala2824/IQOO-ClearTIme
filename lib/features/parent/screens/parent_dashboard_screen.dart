@@ -71,10 +71,10 @@ class _ParentDashboardScreenState extends ConsumerState<ParentDashboardScreen> {
       );
     }
 
-    final activeChild = children.firstWhere(
-      (c) => c.id == _selectedChildId,
-      orElse: () => children.first,
-    );
+    final activeChild = children
+            .where((c) => c.id == _selectedChildId)
+            .firstOrNull ??
+        children.firstOrNull!;
 
     final childUsage = parentState.childUsageSummaries[activeChild.id];
     final childSession = parentState.childCoachingSessions[activeChild.id];
@@ -82,7 +82,7 @@ class _ParentDashboardScreenState extends ConsumerState<ParentDashboardScreen> {
     final aiGoals = parentState.childGoals
         .where((g) => g.source == GoalSource.aiGenerated && g.status == GoalStatus.active)
         .toList();
-    final activeAiGoal = aiGoals.isNotEmpty ? aiGoals.first : null;
+    final activeAiGoal = aiGoals.firstOrNull;
 
     final childTasks = parentState.parentTasks
         .where((t) => t.assignedToChildId == activeChild.id)
@@ -143,8 +143,11 @@ class _ParentDashboardScreenState extends ConsumerState<ParentDashboardScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    Wrap(
+                      alignment: WrapAlignment.spaceBetween,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 8,
+                      runSpacing: 6,
                       children: [
                         Text(
                           'FAMILY WELLBEING OVERVIEW',
@@ -162,6 +165,7 @@ class _ParentDashboardScreenState extends ConsumerState<ParentDashboardScreen> {
                             borderRadius: BorderRadius.circular(AppRadius.pill),
                           ),
                           child: const Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
                               Icon(Icons.shield_outlined, color: Colors.white, size: 12),
                               SizedBox(width: 4),
@@ -320,8 +324,11 @@ class _ParentDashboardScreenState extends ConsumerState<ParentDashboardScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    Wrap(
+                      alignment: WrapAlignment.spaceBetween,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 8,
+                      runSpacing: 6,
                       children: [
                         Text(
                           '${activeChild.nickname}\'s Daily Balance',
@@ -348,7 +355,7 @@ class _ParentDashboardScreenState extends ConsumerState<ParentDashboardScreen> {
                             color: AppColors.parentPrimary,
                           ),
                         ),
-                        const SizedBox(width: 10),
+                        const SizedBox(width: 8),
                         Expanded(
                           child: _buildMetricTile(
                             context,
@@ -360,7 +367,7 @@ class _ParentDashboardScreenState extends ConsumerState<ParentDashboardScreen> {
                             color: AppColors.successGreen,
                           ),
                         ),
-                        const SizedBox(width: 10),
+                        const SizedBox(width: 8),
                         Expanded(
                           child: _buildMetricTile(
                             context,
@@ -383,8 +390,11 @@ class _ParentDashboardScreenState extends ConsumerState<ParentDashboardScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    Wrap(
+                      alignment: WrapAlignment.spaceBetween,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 8,
+                      runSpacing: 4,
                       children: [
                         const Text(
                           'Real-World Activities',
@@ -448,15 +458,19 @@ class _ParentDashboardScreenState extends ConsumerState<ParentDashboardScreen> {
                                   children: [
                                     Row(
                                       children: [
-                                        Text(
-                                          task.title,
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.w800,
-                                            fontSize: 14,
-                                            color: AppColors.parentTextDark,
+                                        Flexible(
+                                          child: Text(
+                                            task.title,
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.w800,
+                                              fontSize: 14,
+                                              color: AppColors.parentTextDark,
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
                                           ),
                                         ),
-                                        const SizedBox(width: 8),
+                                        const SizedBox(width: 6),
                                         Text(
                                           '(${task.targetMinutes}m)',
                                           style: const TextStyle(
@@ -476,11 +490,14 @@ class _ParentDashboardScreenState extends ConsumerState<ParentDashboardScreen> {
                                           color: AppColors.warningOrange,
                                           fontWeight: FontWeight.w600,
                                         ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
                                       ),
                                     ],
                                   ],
                                 ),
                               ),
+                              const SizedBox(width: 8),
                               if (task.status == MissionStatus.submitted)
                                 AppStatusBadge.warning(label: 'Review')
                               else if (task.status == MissionStatus.approved)
@@ -520,12 +537,16 @@ class _ParentDashboardScreenState extends ConsumerState<ParentDashboardScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text(
-                          'Mindful Coaching Loop',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 15,
-                            color: AppColors.parentTextDark,
+                        const Flexible(
+                          child: Text(
+                            'Mindful Coaching Loop',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 15,
+                              color: AppColors.parentTextDark,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                         const Icon(Icons.psychology_outlined, color: AppColors.parentPrimary, size: 20),
@@ -555,11 +576,11 @@ class _ParentDashboardScreenState extends ConsumerState<ParentDashboardScreen> {
                         ),
                         child: Row(
                           children: [
-                            Text(childSession.patterns.first.emoji, style: const TextStyle(fontSize: 18)),
+                            Text(childSession.patterns.firstOrNull?.emoji ?? '✨', style: const TextStyle(fontSize: 18)),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                childSession.patterns.first.description,
+                                childSession.patterns.firstOrNull?.description ?? '',
                                 style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w500),
                               ),
                             ),
@@ -586,7 +607,7 @@ class _ParentDashboardScreenState extends ConsumerState<ParentDashboardScreen> {
     required Color color,
   }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
       decoration: BoxDecoration(
         color: AppColors.neutral50,
         borderRadius: BorderRadius.circular(AppRadius.md),
@@ -594,24 +615,33 @@ class _ParentDashboardScreenState extends ConsumerState<ParentDashboardScreen> {
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, color: color, size: 18),
           const SizedBox(height: 6),
-          Text(
-            value,
-            style: const TextStyle(
-              fontWeight: FontWeight.w800,
-              fontSize: 15,
-              color: AppColors.parentTextDark,
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontWeight: FontWeight.w800,
+                fontSize: 15,
+                color: AppColors.parentTextDark,
+              ),
             ),
           ),
           const SizedBox(height: 2),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 11,
-              color: AppColors.neutralMuted,
-              fontWeight: FontWeight.w500,
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 11,
+                color: AppColors.neutralMuted,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
         ],

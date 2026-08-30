@@ -86,11 +86,15 @@ class AppButton extends StatelessWidget {
         children: [
           Icon(icon, size: iconSize),
           const SizedBox(width: 8),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: fontSize,
-              fontWeight: FontWeight.w700,
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: fontSize,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ],
@@ -99,6 +103,8 @@ class AppButton extends StatelessWidget {
       childContent = Text(
         label,
         textAlign: TextAlign.center,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
         style: TextStyle(
           fontSize: fontSize,
           fontWeight: FontWeight.w700,

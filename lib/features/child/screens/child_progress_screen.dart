@@ -95,74 +95,100 @@ class _ChildProgressScreenState extends ConsumerState<ChildProgressScreen> {
                 ],
               ),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  Column(
-                    children: [
-                      const Icon(Icons.task_alt_rounded,
-                          color: AppColors.childAccent, size: 32),
-                      const SizedBox(height: 4),
-                      Text(
-                        '${missionsState.completedCount}',
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.task_alt_rounded,
+                            color: AppColors.childAccent, size: 28),
+                        const SizedBox(height: 4),
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            '${missionsState.completedCount}',
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                            ),
+                          ),
                         ),
-                      ),
-                      const Text(
-                        'Activities Done',
-                        style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w600),
-                      ),
-                    ],
+                        const FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            'Activities Done',
+                            style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                   Container(
                     width: 1,
                     height: 44,
                     color: Colors.white.withAlpha((0.3 * 255).round()),
                   ),
-                  Column(
-                    children: [
-                      const Icon(Icons.local_fire_department_rounded,
-                          color: AppColors.warningOrange, size: 32),
-                      const SizedBox(height: 4),
-                      Text(
-                        '${history.streakDays} ${history.streakDays == 1 ? "Day" : "Days"}',
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.local_fire_department_rounded,
+                            color: AppColors.warningOrange, size: 28),
+                        const SizedBox(height: 4),
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            '${history.streakDays} ${history.streakDays == 1 ? "Day" : "Days"}',
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                            ),
+                          ),
                         ),
-                      ),
-                      const Text(
-                        'Active Streak',
-                        style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w600),
-                      ),
-                    ],
+                        const FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            'Active Streak',
+                            style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                   Container(
                     width: 1,
                     height: 44,
                     color: Colors.white.withAlpha((0.3 * 255).round()),
                   ),
-                  Column(
-                    children: [
-                      const Icon(Icons.verified_rounded,
-                          color: Colors.white, size: 32),
-                      const SizedBox(height: 4),
-                      Text(
-                        '${history.goalsCompleted}',
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.verified_rounded,
+                            color: Colors.white, size: 28),
+                        const SizedBox(height: 4),
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            '${history.goalsCompleted}',
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                            ),
+                          ),
                         ),
-                      ),
-                      const Text(
-                        'Goals Reached',
-                        style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w600),
-                      ),
-                    ],
+                        const FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            'Goals Reached',
+                            style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -175,8 +201,11 @@ class _ChildProgressScreenState extends ConsumerState<ChildProgressScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 8,
+                    runSpacing: 6,
                     children: [
                       const Text(
                         '7-Day Activity Trend',
@@ -187,6 +216,7 @@ class _ChildProgressScreenState extends ConsumerState<ChildProgressScreen> {
                         ),
                       ),
                       Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
                           _buildLegendDot(AppColors.childSecondary, 'Focus'),
                           const SizedBox(width: 10),
@@ -235,8 +265,11 @@ class _ChildProgressScreenState extends ConsumerState<ChildProgressScreen> {
             const SizedBox(height: 18),
 
             // 3. Wellbeing Badges
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              runSpacing: 4,
               children: [
                 const Text(
                   'Wellbeing Badges 🏆',

@@ -393,10 +393,12 @@ class _ParentReportsScreenState extends ConsumerState<ParentReportsScreen>
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(color: AppTheme.neutralBorder),
                     ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    child: Wrap(
+                      alignment: WrapAlignment.spaceBetween,
+                      spacing: 8,
+                      runSpacing: 4,
                       children: [
-                        Text('Privacy Filter: v${report.privacyFilterVersion}',
+                        Text('Privacy: v${report.privacyFilterVersion}',
                             style: const TextStyle(
                                 fontSize: 11, color: AppTheme.neutralMuted)),
                         Text('Context: v${report.contextVersion}',
@@ -865,10 +867,10 @@ class _ParentReportsScreenState extends ConsumerState<ParentReportsScreen>
       );
     }
 
-    final activeChild = children.firstWhere(
-      (c) => c.id == _selectedChildId,
-      orElse: () => children.first,
-    );
+    final activeChild = children
+            .where((c) => c.id == _selectedChildId)
+            .firstOrNull ??
+        children.firstOrNull!;
 
     return Scaffold(
       appBar: AppBar(
@@ -996,15 +998,31 @@ class _ParentReportsScreenState extends ConsumerState<ParentReportsScreen>
 
   Widget _buildReportListView(
       List<ApprovedReport> reports, String periodTitle) {
+    final parentState = ref.watch(parentDashboardControllerProvider);
+    final children = parentState.children;
+    if (children.isEmpty) return const SizedBox.shrink();
+
+    final activeChild = children
+            .where((c) => c.id == _selectedChildId)
+            .firstOrNull ??
+        children.firstOrNull!;
+
     if (reports.isEmpty) {
       return Center(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(32.0),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.assessment_outlined,
-                  size: 48, color: AppTheme.neutralMuted),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppTheme.parentPrimary.withAlpha((0.08 * 255).round()),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.assessment_outlined,
+                    size: 44, color: AppTheme.parentPrimary),
+              ),
               const SizedBox(height: 16),
               Text(
                 'No $periodTitle available yet',
@@ -1013,10 +1031,38 @@ class _ParentReportsScreenState extends ConsumerState<ParentReportsScreen>
                     ),
               ),
               const SizedBox(height: 8),
-              const Text(
-                'Approved reports are built entirely on the child device and synchronized securely without raw surveillance data.',
+              Text(
+                'Reports are extracted securely from ${activeChild.nickname}\'s device from the day usage permission is enabled. Privacy guard prevents raw app tracking while ensuring approved aggregates sync smoothly.',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: AppTheme.neutralMuted, fontSize: 13),
+                style: const TextStyle(color: AppTheme.neutralMuted, fontSize: 13, height: 1.4),
+              ),
+              const SizedBox(height: 20),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.parentPrimary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                icon: const Icon(Icons.cloud_sync_rounded, size: 18),
+                label: const Text('Sync Latest Device Data'),
+                onPressed: () async {
+                  final syncService = ref.read(approvedReportSyncServiceProvider);
+                  final pulled = await syncService.pullSnapshots(activeChild.id);
+                  if (mounted) {
+                    setState(() {});
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          pulled.isNotEmpty
+                              ? 'Synced ${pulled.length} report snapshot(s) from child device.'
+                              : 'Checked child device: no new reports waiting.',
+                        ),
+                        backgroundColor: AppTheme.parentPrimary,
+                      ),
+                    );
+                  }
+                },
               ),
             ],
           ),
@@ -1024,7 +1070,13 @@ class _ParentReportsScreenState extends ConsumerState<ParentReportsScreen>
       );
     }
 
-    return ListView.builder(
+    return RefreshIndicator(
+      onRefresh: () async {
+        final syncService = ref.read(approvedReportSyncServiceProvider);
+        await syncService.pullSnapshots(activeChild.id);
+        if (mounted) setState(() {});
+      },
+      child: ListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount: reports.length,
       itemBuilder: (context, index) {
@@ -1070,55 +1122,72 @@ class _ParentReportsScreenState extends ConsumerState<ParentReportsScreen>
                   ),
                   const SizedBox(height: 12),
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            report.facts.formattedTotalTime,
-                            style: const TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w800,
-                              color: AppTheme.parentTextDark,
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                report.facts.formattedTotalTime,
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppTheme.parentTextDark,
+                                ),
+                              ),
                             ),
-                          ),
-                          const Text('Screen Time',
-                              style: TextStyle(
-                                  fontSize: 11, color: AppTheme.neutralMuted)),
-                        ],
+                            const Text('Screen Time',
+                                style: TextStyle(
+                                    fontSize: 11, color: AppTheme.neutralMuted)),
+                          ],
+                        ),
                       ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            report.facts.formattedFocusTime,
-                            style: const TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w800,
-                              color: AppTheme.parentSecondary,
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                report.facts.formattedFocusTime,
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppTheme.parentSecondary,
+                                ),
+                              ),
                             ),
-                          ),
-                          const Text('Focus Learning',
-                              style: TextStyle(
-                                  fontSize: 11, color: AppTheme.neutralMuted)),
-                        ],
+                            const Text('Focus Learning',
+                                style: TextStyle(
+                                    fontSize: 11, color: AppTheme.neutralMuted)),
+                          ],
+                        ),
                       ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '${report.facts.breakCount}',
-                            style: const TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w800,
-                              color: AppTheme.successGreen,
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                '${report.facts.breakCount}',
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppTheme.successGreen,
+                                ),
+                              ),
                             ),
-                          ),
-                          const Text('Breaks',
-                              style: TextStyle(
-                                  fontSize: 11, color: AppTheme.neutralMuted)),
-                        ],
+                            const Text('Breaks',
+                                style: TextStyle(
+                                    fontSize: 11, color: AppTheme.neutralMuted)),
+                          ],
+                        ),
                       ),
                     ],
                   ),
@@ -1134,19 +1203,31 @@ class _ParentReportsScreenState extends ConsumerState<ParentReportsScreen>
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        'Change: $changeSign${report.facts.changePercentage}%',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: report.facts.changePercentage > 10
-                              ? AppTheme.warningOrange
-                              : AppTheme.successGreen,
+                      Flexible(
+                        child: Text(
+                          'Change: $changeSign${report.facts.changePercentage}%',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: report.facts.changePercentage > 10
+                                ? AppTheme.warningOrange
+                                : AppTheme.successGreen,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                       Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
                           TextButton.icon(
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 4),
+                              minimumSize: Size.zero,
+                              tapTargetSize:
+                                  MaterialTapTargetSize.shrinkWrap,
+                            ),
                             onPressed: () {
                               context.push(AppRoutes.parentAi);
                             },
@@ -1167,6 +1248,7 @@ class _ParentReportsScreenState extends ConsumerState<ParentReportsScreen>
           ),
         );
       },
-    );
-  }
+    ),
+  );
+}
 }

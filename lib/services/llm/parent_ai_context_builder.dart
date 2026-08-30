@@ -58,7 +58,7 @@ class ParentAIContextBuilder {
     final todayStart = DateTime(now.year, now.month, now.day);
     final yesterdayStart = todayStart.subtract(const Duration(days: 1));
 
-    buffer.writeln('=== CLEARTIME APP WORKFLOW CONTEXT ===');
+    buffer.writeln('=== ClearTime App Workflow Context ===');
     buffer.writeln('- Child Profile: ${child.nickname} (Age: ${child.age})');
 
     // 1. REAL-WORLD MISSIONS / ACTIVITIES WORKFLOW
@@ -173,8 +173,8 @@ class ParentAIContextBuilder {
       }
     }
 
-    // 5. CLEARTIME APP FEATURE ENCYCLOPEDIA (FOR ANSWERING USER QUESTIONS ABOUT APP FEATURES)
-    buffer.writeln('\n=== CLEARTIME APP FEATURE KNOWLEDGE BASE ===');
+    // 5. ClearTime App Feature Encyclopedia (for answering user questions about app features)
+    buffer.writeln('\n=== ClearTime App Feature Knowledge Base ===');
     buffer.writeln('- 🏡 Parent-Assigned Real-World Missions: Offline activities, chores, and study tasks assigned directly by parents. Parents can require photo/note/timer proof and manually review/approve submissions.');
     buffer.writeln('- 🤖 AI-Assigned Autonomous Missions: Offline missions created dynamically by on-device AI based on live Android usage stats to counterbalance entertainment/gaming screen time.');
     buffer.writeln('- 📊 Mindful Reports & Summaries: Private on-device aggregation of weekly/daily trends, focus balance, and offline achievements.');

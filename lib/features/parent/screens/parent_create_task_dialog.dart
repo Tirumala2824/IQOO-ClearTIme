@@ -72,11 +72,12 @@ class _ParentCreateTaskDialogState extends ConsumerState<ParentCreateTaskDialog>
   bool get isEdit => widget.existingTask != null;
 
   Future<void> _generateAiSuggestions() async {
-    if (_selectedChildId == null) return;
-    final child = widget.children.firstWhere(
-      (c) => c.id == _selectedChildId,
-      orElse: () => widget.children.first,
-    );
+    if (_selectedChildId == null || widget.children.isEmpty) return;
+    final child = widget.children
+            .where((c) => c.id == _selectedChildId)
+            .firstOrNull ??
+        widget.children.firstOrNull;
+    if (child == null) return;
 
     setState(() => _isGeneratingAi = true);
     try {
@@ -131,7 +132,7 @@ class _ParentCreateTaskDialogState extends ConsumerState<ParentCreateTaskDialog>
     } else if (widget.children.isNotEmpty) {
       final initial = widget.children.any((c) => c.id == widget.initialChildId)
           ? widget.initialChildId
-          : widget.children.first.id;
+          : widget.children.firstOrNull?.id;
       _selectedChildId = initial;
     }
   }
@@ -205,12 +206,21 @@ class _ParentCreateTaskDialogState extends ConsumerState<ParentCreateTaskDialog>
       _errorMessage = null;
     });
 
+    if (widget.children.isEmpty) {
+      setState(() {
+        _isSubmitting = false;
+        _errorMessage = 'No linked child devices available.';
+      });
+      return;
+    }
+
     final parentState = ref.read(parentDashboardControllerProvider);
     final parentUserId = parentState.family?.adminUserId ?? '';
-    final targetChild = widget.children.firstWhere(
-      (c) => c.id == _selectedChildId,
-      orElse: () => widget.children.first,
-    );
+    final targetChild = widget.children
+            .where((c) => c.id == _selectedChildId)
+            .firstOrNull ??
+        widget.children.firstOrNull;
+    if (targetChild == null) return;
 
     final duration = int.tryParse(_durationController.text.trim()) ?? 30;
 

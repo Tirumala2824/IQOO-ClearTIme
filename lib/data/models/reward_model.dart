@@ -25,10 +25,10 @@ enum RewardStatus {
   }
 
   static RewardStatus fromString(String? name) {
-    return RewardStatus.values.firstWhere(
-      (s) => s.name == name,
-      orElse: () => RewardStatus.locked,
-    );
+    return RewardStatus.values
+            .where((s) => s.name == name)
+            .firstOrNull ??
+        RewardStatus.locked;
   }
 }
 

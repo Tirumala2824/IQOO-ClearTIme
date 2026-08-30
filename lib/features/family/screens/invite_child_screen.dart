@@ -112,9 +112,7 @@ class _InviteChildScreenState extends ConsumerState<InviteChildScreen> {
     final inviteState = ref.watch(invitationControllerProvider);
     final family = parentState.family;
     final latestInvite = inviteState.latestInvitation ??
-        (inviteState.activeInvitations.isNotEmpty
-            ? inviteState.activeInvitations.first
-            : null);
+        inviteState.activeInvitations.firstOrNull;
 
     return Scaffold(
       appBar: AppBar(
@@ -148,13 +146,13 @@ class _InviteChildScreenState extends ConsumerState<InviteChildScreen> {
                     width: 80,
                     height: 80,
                     decoration: BoxDecoration(
-                      color:
-                          AppTheme.parentPrimary.withAlpha((0.1 * 255).round()),
+                      color: AppTheme.parentPrimary
+                          .withAlpha((0.1 * 255).round()),
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(
                       Icons.qr_code_2_rounded,
-                      size: 44,
+                      size: 42,
                       color: AppTheme.parentPrimary,
                     ),
                   ),
@@ -163,39 +161,41 @@ class _InviteChildScreenState extends ConsumerState<InviteChildScreen> {
                 Text(
                   'Pair Child Device Securely',
                   textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
                       ),
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Generate a single-use cryptographic invitation code or QR code to link your child’s device to ${family?.name ?? "your family"}.',
+                  'Generate a single-use pairing code or QR code to link your child’s device to your family space.',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
-                const SizedBox(height: 32),
+                const SizedBox(height: 28),
                 ElevatedButton.icon(
                   onPressed:
                       inviteState.isLoading ? null : _handleGenerateInvitation,
-                  icon: const Icon(Icons.add_link_rounded),
-                  label: inviteState.isLoading
+                  icon: inviteState.isLoading
                       ? const SizedBox(
-                          height: 20,
                           width: 20,
+                          height: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
                             valueColor:
                                 AlwaysStoppedAnimation<Color>(Colors.white),
                           ),
                         )
-                      : const Text('Generate Secure Invitation'),
+                      : const Icon(Icons.add_link_rounded),
+                  label: const Text('Generate Invitation Code'),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
                 ),
               ] else ...[
-                // Display QR code & Invitation Code
+                // Active Invitation details
                 Card(
-                  elevation: 2,
                   child: Padding(
-                    padding: const EdgeInsets.all(24.0),
+                    padding: const EdgeInsets.all(20.0),
                     child: Column(
                       children: [
                         Text(
@@ -219,17 +219,26 @@ class _InviteChildScreenState extends ConsumerState<InviteChildScreen> {
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(color: AppTheme.neutralBorder),
                           ),
-                          child: QrImageView(
-                            data: latestInvite.qrPayload,
-                            version: QrVersions.auto,
-                            size: 200.0,
-                            eyeStyle: const QrEyeStyle(
-                              eyeShape: QrEyeShape.square,
-                              color: AppTheme.parentPrimary,
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(
+                              maxWidth: 180.0,
+                              maxHeight: 180.0,
                             ),
-                            dataModuleStyle: const QrDataModuleStyle(
-                              dataModuleShape: QrDataModuleShape.square,
-                              color: AppTheme.parentPrimary,
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: QrImageView(
+                                data: latestInvite.qrPayload,
+                                version: QrVersions.auto,
+                                size: 180.0,
+                                eyeStyle: const QrEyeStyle(
+                                  eyeShape: QrEyeShape.square,
+                                  color: AppTheme.parentPrimary,
+                                ),
+                                dataModuleStyle: const QrDataModuleStyle(
+                                  dataModuleShape: QrDataModuleShape.square,
+                                  color: AppTheme.parentPrimary,
+                                ),
+                              ),
                             ),
                           ),
                         ),
@@ -246,7 +255,7 @@ class _InviteChildScreenState extends ConsumerState<InviteChildScreen> {
                         const SizedBox(height: 10),
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 20, vertical: 12),
+                              horizontal: 16, vertical: 12),
                           decoration: BoxDecoration(
                             color: AppTheme.parentPrimary
                                 .withAlpha((0.08 * 255).round()),
@@ -255,16 +264,21 @@ class _InviteChildScreenState extends ConsumerState<InviteChildScreen> {
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Text(
-                                latestInvite.invitationCode,
-                                style: const TextStyle(
-                                  fontSize: 26,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: 6,
-                                  color: AppTheme.parentPrimary,
+                              Flexible(
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text(
+                                    latestInvite.invitationCode,
+                                    style: const TextStyle(
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: 4,
+                                      color: AppTheme.parentPrimary,
+                                    ),
+                                  ),
                                 ),
                               ),
-                              const SizedBox(width: 12),
+                              const SizedBox(width: 8),
                               IconButton(
                                 icon: const Icon(Icons.copy_rounded,
                                     color: AppTheme.parentPrimary),

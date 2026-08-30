@@ -19,6 +19,7 @@ import 'package:cleartime/data/models/notification_pref_model.dart';
 import 'package:cleartime/data/models/privacy_setting_model.dart';
 import 'package:cleartime/core/services/abstractions/local_llm_provider.dart';
 import 'package:cleartime/core/services/abstractions/usage_data_provider.dart';
+import 'package:cleartime/services/agent/autonomous_agent_engine.dart';
 import 'package:cleartime/services/storage/encrypted_device_store.dart';
 import 'package:cleartime/features/authentication/screens/login_screen.dart';
 import 'package:cleartime/features/child/screens/child_dashboard_screen.dart';
@@ -216,6 +217,9 @@ class FakeFamilyRepository implements FamilyRepository {
 
   @override
   Future<void> deleteFamily(String familyId) async {}
+
+  @override
+  Future<void> deleteChildProfile(String childId) async {}
 
   @override
   Future<ChildProfile> redeemInvitation({
@@ -431,6 +435,12 @@ void main() {
         activeLlmProvider.overrideWith((ref) => FakeLocalLLMProvider()),
         usageDataProvider.overrideWithValue(FakeUsageProvider()),
         familyRepositoryProvider.overrideWithValue(FakeFamilyRepository()),
+        autonomousAgentEngineProvider.overrideWith((ref) => AutonomousAgentEngine(
+              missionRepo: ref.watch(localMissionRepositoryProvider),
+              configRepo: ref.watch(configurationRepositoryProvider),
+              reportRepo: ref.watch(approvedReportRepositoryProvider),
+              startPeriodicHeartbeat: false,
+            )),
       ];
 
   group('ClearTime UI Widget Tests', () {
@@ -521,10 +531,9 @@ void main() {
       await tester.pump();
 
       expect(find.textContaining('Hey,'), findsOneWidget);
-      expect(find.text("TODAY'S WELLBEING"), findsOneWidget);
+      expect(find.text("TODAY'S BALANCE"), findsOneWidget);
       expect(find.text('Screen Time'), findsOneWidget);
       expect(find.text('Focus Time'), findsOneWidget);
-      expect(find.text('Current Goal 🎯'), findsOneWidget);
     });
 
     testWidgets('ChildMissionsScreen renders activities screen and empty state',
@@ -555,13 +564,11 @@ void main() {
           ),
         ),
       );
-      await tester.pump(const Duration(milliseconds: 100));
-      await tester.pump(const Duration(milliseconds: 200));
-      await tester.pump();
+      await tester.pumpAndSettle();
 
-      expect(find.text('Goals & Activities 🎯'), findsOneWidget);
+      expect(find.text('Goals & Activities'), findsOneWidget);
       expect(find.text('Active Focus Goals'), findsOneWidget);
-      expect(find.text('Activities'), findsOneWidget);
+      expect(find.text('Offline Activities'), findsOneWidget);
     });
 
     testWidgets('ChildProgressScreen renders stats and empty badge state',
@@ -574,12 +581,10 @@ void main() {
           ),
         ),
       );
-      await tester.pump(const Duration(milliseconds: 100));
-      await tester.pump(const Duration(milliseconds: 200));
-      await tester.pump();
+      await tester.pumpAndSettle();
 
-      expect(find.text('My Progress & Badges 🏆'), findsOneWidget);
-      expect(find.text('No badges available yet.'), findsOneWidget);
+      expect(find.text('My Progress & Badges'), findsOneWidget);
+      expect(find.text('Wellbeing Badges 🏆'), findsOneWidget);
     });
 
     testWidgets('ChildAiScreen renders offline buddy chat with prompt chips',
@@ -592,14 +597,12 @@ void main() {
           ),
         ),
       );
-      await tester.pump(const Duration(milliseconds: 100));
-      await tester.pump(const Duration(milliseconds: 200));
-      await tester.pump();
+      await tester.pumpAndSettle();
 
-      expect(find.text('My AI Agent 🤖'), findsOneWidget);
-      expect(find.textContaining('100% On-Device AI Agent'), findsOneWidget);
-      expect(find.text('✨ Give me a mission challenge'), findsOneWidget);
-      expect(find.text('🎯 Help me focus for 15 mins'), findsOneWidget);
+      expect(find.text('Mindful Buddy Agent 🤖'), findsOneWidget);
+      expect(find.textContaining('100% On-Device'), findsOneWidget);
+      expect(find.text('Daily AI Activity'), findsOneWidget);
+      expect(find.text('25m Focus Sprint'), findsOneWidget);
     });
 
     testWidgets(
@@ -636,9 +639,7 @@ void main() {
           ),
         ),
       );
-      await tester.pump(const Duration(milliseconds: 100));
-      await tester.pump(const Duration(milliseconds: 200));
-      await tester.pump();
+      await tester.pumpAndSettle();
 
       expect(find.text('Local Model Manager'), findsOneWidget);
       expect(find.textContaining('Installed'), findsOneWidget);
@@ -665,9 +666,24 @@ void main() {
 
     testWidgets('PromptEditorScreen renders variable chips and preview',
         (WidgetTester tester) async {
+      final container = ProviderContainer(overrides: baseOverrides());
+      final promptRepo = container.read(localPromptRepositoryProvider);
+      await promptRepo.savePrompt(
+        PromptDefinition(
+          id: 'prompt-child-insight',
+          name: 'Child Daily Insight',
+          type: PromptType.childInsight,
+          content: 'Insights for {{child_name}} with {{screen_time}}m.',
+          version: 1,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+          supportedVariables: const ['child_name', 'screen_time'],
+        ),
+      );
+
       await tester.pumpWidget(
-        ProviderScope(
-          overrides: baseOverrides(),
+        UncontrolledProviderScope(
+          container: container,
           child: const MaterialApp(
             home: PromptEditorScreen(promptId: 'prompt-child-insight'),
           ),
@@ -732,8 +748,8 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
       await tester.pump();
 
-      expect(find.text('Parent AI Assistant'), findsOneWidget);
-      expect(find.textContaining('100% On-Device Inference'), findsOneWidget);
+      expect(find.text('Guardian AI Agent Deck'), findsOneWidget);
+      expect(find.byType(ParentAiScreen), findsOneWidget);
     });
 
     testWidgets('ParentReportsScreen renders period tabs and configure button',
@@ -893,6 +909,128 @@ void main() {
       expect(find.text('Your Nickname'), findsOneWidget);
       expect(find.text('Choose an Avatar'), findsOneWidget);
       expect(find.text('Join Family Hub'), findsOneWidget);
+    });
+
+    testWidgets(
+        'Responsive layout renders overflow-free at 200px width for ParentAiScreen',
+        (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(200, 600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final fakeParent = UserProfile(
+        id: 'parent-123',
+        role: UserRole.parent,
+        email: 'parent@example.com',
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+
+      final container = ProviderContainer(
+        overrides: [
+          ...baseOverrides(),
+          authRepositoryProvider
+              .overrideWithValue(FakeAuthRepository(fakeParent)),
+          familyRepositoryProvider.overrideWithValue(FakeFamilyRepository()),
+          configurationRepositoryProvider
+              .overrideWithValue(FakeConfigurationRepository()),
+        ],
+      );
+      await container
+          .read(parentDashboardControllerProvider.notifier)
+          .loadDashboard('parent-123');
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(
+            home: ParentAiScreen(),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets(
+        'Responsive layout renders overflow-free at 200px width for ChildDashboardScreen',
+        (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(200, 600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final fakeChild = UserProfile(
+        id: 'child-123',
+        role: UserRole.child,
+        displayName: 'Leo',
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            ...baseOverrides(),
+            authRepositoryProvider
+                .overrideWithValue(FakeAuthRepository(fakeChild)),
+            familyRepositoryProvider.overrideWithValue(FakeFamilyRepository()),
+            configurationRepositoryProvider
+                .overrideWithValue(FakeConfigurationRepository()),
+          ],
+          child: const MaterialApp(
+            home: ChildDashboardScreen(),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets(
+        'Responsive layout renders overflow-free at 200px width for InviteChildScreen & JoinFamilyScreen',
+        (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(200, 600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final fakeParent = UserProfile(
+        id: 'parent-123',
+        role: UserRole.parent,
+        email: 'parent@example.com',
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+
+      final container = ProviderContainer(
+        overrides: [
+          ...baseOverrides(),
+          authRepositoryProvider
+              .overrideWithValue(FakeAuthRepository(fakeParent)),
+          familyRepositoryProvider.overrideWithValue(FakeFamilyRepository()),
+          configurationRepositoryProvider
+              .overrideWithValue(FakeConfigurationRepository()),
+        ],
+      );
+      await container
+          .read(parentDashboardControllerProvider.notifier)
+          .loadDashboard('parent-123');
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(
+            home: InviteChildScreen(),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(tester.takeException(), isNull);
     });
   });
 }

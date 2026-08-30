@@ -49,6 +49,8 @@ abstract class FamilyRepository {
   Future<Family> updateFamily(String familyId, {required String name});
 
   Future<void> deleteFamily(String familyId);
+
+  Future<void> deleteChildProfile(String childId);
 }
 
 class SupabaseFamilyRepository implements FamilyRepository {
@@ -231,9 +233,12 @@ class SupabaseFamilyRepository implements FamilyRepository {
           .eq('family_id', familyId)
           .order('created_at', ascending: true);
 
-      return (response as List)
-          .map((json) => ChildProfile.fromJson(json as Map<String, dynamic>))
-          .toList();
+      final Map<String, ChildProfile> unique = {};
+      for (final json in (response as List)) {
+        final profile = ChildProfile.fromJson(json as Map<String, dynamic>);
+        unique[profile.id] = profile;
+      }
+      return unique.values.toList();
     } on PostgrestException catch (e) {
       throw AppDatabaseException('Error loading children: ${e.message}');
     } catch (e) {
@@ -481,6 +486,14 @@ class SupabaseFamilyRepository implements FamilyRepository {
 
   @override
   Future<void> deleteFamily(String familyId) async {
+    // 1. Try atomic database RPC first
+    try {
+      await _client.rpc('delete_family_hub', params: {'p_family_id': familyId});
+      return;
+    } catch (_) {
+      // Fallback to direct table delete
+    }
+
     try {
       await _client.from('families').delete().eq('id', familyId);
     } on PostgrestException catch (e) {
@@ -489,4 +502,24 @@ class SupabaseFamilyRepository implements FamilyRepository {
       throw AppDatabaseException('Unexpected error deleting family: $e');
     }
   }
+
+  @override
+  Future<void> deleteChildProfile(String childId) async {
+    // 1. Try atomic database RPC first
+    try {
+      await _client.rpc('delete_child_profile', params: {'p_child_id': childId});
+      return;
+    } catch (_) {
+      // Fallback to direct table delete
+    }
+
+    try {
+      await _client.from('child_profiles').delete().eq('id', childId);
+    } on PostgrestException catch (e) {
+      throw AppDatabaseException('Error deleting child profile: ${e.message}');
+    } catch (e) {
+      throw AppDatabaseException('Unexpected error deleting child profile: $e');
+    }
+  }
 }
+

@@ -65,8 +65,18 @@ class SupabaseRewardRepository implements RewardRepository {
   Future<List<Reward>> _list(String column, String id) async {
     final client = _safeClient;
     if (client == null || client.auth.currentUser == null) return const [];
-    final rows = await client.from('mission_rewards').select().eq(column, id).order('created_at', ascending: false);
-    return (rows as List).map((row) => _reward(Map<String, dynamic>.from(row as Map))).toList();
+    final rows = await client
+        .from('mission_rewards')
+        .select()
+        .eq(column, id)
+        .order('created_at', ascending: false);
+
+    final Map<String, Reward> unique = {};
+    for (final row in (rows as List)) {
+      final r = _reward(Map<String, dynamic>.from(row as Map));
+      unique[r.id] = r;
+    }
+    return unique.values.toList();
   }
 
   @override
@@ -90,6 +100,23 @@ class SupabaseRewardRepository implements RewardRepository {
   }
 
   @override
-  Future<Reward> cancelReward(String rewardId, {required String actorUserId}) =>
-      throw UnsupportedError('Reward cancellation needs an audited database command.');
+  Future<Reward> cancelReward(String rewardId, {required String actorUserId}) async {
+    try {
+      final row = await _requireClient.rpc('cancel_mission_reward', params: {'p_reward_id': rewardId});
+      return _reward(Map<String, dynamic>.from(row as Map));
+    } catch (_) {
+      // Direct update fallback
+      final nowIso = DateTime.now().toIso8601String();
+      final res = await _requireClient
+          .from('mission_rewards')
+          .update({
+            'status': 'cancelled',
+            'cancelled_at': nowIso,
+          })
+          .eq('id', rewardId)
+          .select()
+          .single();
+      return _reward(Map<String, dynamic>.from(res));
+    }
+  }
 }

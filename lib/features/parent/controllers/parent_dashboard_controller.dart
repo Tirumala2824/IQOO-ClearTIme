@@ -24,6 +24,7 @@ import '../../../core/services/task_notification_service.dart';
 import '../../../data/models/reward_model.dart';
 import '../../../services/coaching/coaching_loop_service.dart';
 import '../../../services/realtime/mission_realtime_service.dart';
+import '../../../services/analytics/approved_report_sync_service.dart';
 
 class ParentDashboardState {
   final Family? family;
@@ -101,9 +102,10 @@ class ParentDashboardState {
     bool? isLoading,
     String? errorMessage,
     bool clearError = false,
+    bool clearFamily = false,
   }) {
     return ParentDashboardState(
-      family: family ?? this.family,
+      family: clearFamily ? null : (family ?? this.family),
       allFamilies: allFamilies ?? this.allFamilies,
       children: children ?? this.children,
       reports: reports ?? this.reports,
@@ -136,6 +138,7 @@ class ParentDashboardController extends StateNotifier<ParentDashboardState> {
   final RewardRepository _rewardRepository;
   final TaskNotificationService _taskNotifications;
   final MissionRealtimeService? _realtimeService;
+  final ApprovedReportSyncService? _syncService;
   bool _realtimeSubscribed = false;
 
   ParentDashboardController({
@@ -149,6 +152,7 @@ class ParentDashboardController extends StateNotifier<ParentDashboardState> {
     required RewardRepository rewardRepository,
     required NotificationProvider notificationProvider,
     MissionRealtimeService? realtimeService,
+    ApprovedReportSyncService? syncService,
   })  : _familyRepository = familyRepository,
         _configurationRepository = configurationRepository,
         _approvedReportRepository = approvedReportRepository,
@@ -158,6 +162,7 @@ class ParentDashboardController extends StateNotifier<ParentDashboardState> {
         _missionRepository = missionRepository,
         _rewardRepository = rewardRepository,
         _realtimeService = realtimeService,
+        _syncService = syncService,
         _taskNotifications = TaskNotificationService(
           notificationProvider: notificationProvider,
         ),
@@ -166,29 +171,42 @@ class ParentDashboardController extends StateNotifier<ParentDashboardState> {
   Future<void> loadDashboard(String userId, {Family? forceFamily}) async {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
-      final allFamilies = await _familyRepository.getAllFamiliesForUser(userId);
+      final rawAllFamilies = await _familyRepository.getAllFamiliesForUser(userId);
+      final allFamilies = {for (var f in rawAllFamilies) f.id: f}.values.toList();
+
       final family = forceFamily ??
-          (state.family != null && allFamilies.any((f) => f.id == state.family!.id)
-              ? allFamilies.firstWhere((f) => f.id == state.family!.id)
-              : (allFamilies.isNotEmpty
-                  ? allFamilies.first
-                  : await _familyRepository.getFamilyForUser(userId)));
+          (state.family != null
+              ? (allFamilies.where((f) => f.id == state.family!.id).firstOrNull ??
+                  allFamilies.firstOrNull ??
+                  await _familyRepository.getFamilyForUser(userId))
+              : (allFamilies.firstOrNull ??
+                  await _familyRepository.getFamilyForUser(userId)));
 
       if (family == null) {
         state = state.copyWith(
           isLoading: false,
-          family: null,
+          clearFamily: true,
           allFamilies: allFamilies,
           children: [],
+          parentTasks: [],
+          reports: [],
+          triggers: [],
+          approvedReports: [],
         );
         return;
       }
 
-      final children = await _familyRepository.getChildrenForFamily(family.id);
-      final reports =
+      final rawChildren = await _familyRepository.getChildrenForFamily(family.id);
+      final children = {for (var c in rawChildren) c.id: c}.values.toList();
+
+      final rawReports =
           await _configurationRepository.getReportConfigurations(family.id);
-      final triggers =
+      final reports = {for (var r in rawReports) r.id: r}.values.toList();
+
+      final rawTriggers =
           await _configurationRepository.getTriggerConfigurations(family.id);
+      final triggers = {for (var t in rawTriggers) t.id: t}.values.toList();
+
       final notifs =
           await _configurationRepository.getNotificationPreferences(userId);
       final privacy = await _configurationRepository.getPrivacySettings(
@@ -196,15 +214,27 @@ class ParentDashboardController extends StateNotifier<ParentDashboardState> {
         userId: userId,
       );
 
-      // Load approved reports for all children
-      final List<ApprovedReport> allReports = [];
+      // Load approved reports for all children (deduplicated & cloud-synced)
+      final Map<String, ApprovedReport> reportMap = {};
       final List<String> alerts = [];
 
       for (final child in children) {
+        if (_syncService != null) {
+          try {
+            final synced = await _syncService!.pullSnapshots(child.id);
+            for (final r in synced) {
+              reportMap[r.id] = r;
+            }
+          } catch (_) {}
+        }
+
         final childReports =
             await _approvedReportRepository.getApprovedReports(child.id);
-        allReports.addAll(childReports);
+        for (final r in childReports) {
+          reportMap[r.id] = r;
+        }
       }
+      final allReports = reportMap.values.toList();
 
       // Load live child usage and coaching loop status
       final Map<String, UsageSummary> usageMap = {};
@@ -232,11 +262,14 @@ class ParentDashboardController extends StateNotifier<ParentDashboardState> {
       } catch (_) {}
 
       final goals = await _goalRepository.getGoals();
-      final tasks = await _missionRepository.getMissionsForParent(
+      final rawTasks = await _missionRepository.getMissionsForParent(
         parentId: userId,
         familyId: family.id,
       );
-      final rewards = await _rewardRepository.getRewardsForParent(userId);
+      final tasks = {for (var t in rawTasks) t.id: t}.values.toList();
+
+      final rawRewards = await _rewardRepository.getRewardsForParent(userId);
+      final rewards = {for (var r in rawRewards) r.id: r}.values.toList();
 
       for (final child in children) {
         usageMap[child.id] = todayUsage;
@@ -303,6 +336,32 @@ class ParentDashboardController extends StateNotifier<ParentDashboardState> {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
       await _familyRepository.deleteFamily(familyId);
+      final remainingFamilies = await _familyRepository.getAllFamiliesForUser(userId);
+      if (remainingFamilies.isNotEmpty) {
+        await loadDashboard(userId, forceFamily: remainingFamilies.firstOrNull);
+      } else {
+        state = state.copyWith(
+          isLoading: false,
+          clearFamily: true,
+          allFamilies: [],
+          children: [],
+          parentTasks: [],
+          reports: [],
+          triggers: [],
+          approvedReports: [],
+        );
+      }
+      return true;
+    } catch (e) {
+      state = state.copyWith(isLoading: false, errorMessage: e.toString());
+      return false;
+    }
+  }
+
+  Future<bool> deleteChild(String childId, String userId) async {
+    state = state.copyWith(isLoading: true, clearError: true);
+    try {
+      await _familyRepository.deleteChildProfile(childId);
       await loadDashboard(userId);
       return true;
     } catch (e) {
@@ -640,5 +699,6 @@ final parentDashboardControllerProvider =
     rewardRepository: rewardRepo,
     notificationProvider: notifProvider,
     realtimeService: realtimeService,
+    syncService: ref.watch(approvedReportSyncServiceProvider),
   );
 });

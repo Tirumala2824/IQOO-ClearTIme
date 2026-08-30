@@ -27,6 +27,22 @@ class Family {
     );
   }
 
+  Family copyWith({
+    String? id,
+    String? name,
+    String? adminUserId,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) {
+    return Family(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      adminUserId: adminUserId ?? this.adminUserId,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
   Map<String, dynamic> toJson() {
     return {
       'id': id,

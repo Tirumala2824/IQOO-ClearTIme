@@ -61,7 +61,7 @@ class EncryptedLocalPromptRepository implements LocalPromptRepository {
   Future<PromptDefinition?> getActivePromptByType(PromptType type) async {
     final prompts = await getAllPrompts();
     try {
-      return prompts.firstWhere((p) => p.type == type && p.isActive);
+      return prompts.where((p) => p.type == type && p.isActive).firstOrNull;
     } catch (_) {
       return null;
     }
@@ -219,10 +219,12 @@ class EncryptedLocalPromptRepository implements LocalPromptRepository {
     }
 
     final history = await getVersionHistory(promptId);
-    final historical = history.firstWhere(
-      (v) => v.version == targetVersion,
-      orElse: () => throw ArgumentError('Version $targetVersion not found for prompt $promptId'),
-    );
+    final historical =
+        history.where((v) => v.version == targetVersion).firstOrNull;
+    if (historical == null) {
+      throw ArgumentError(
+          'Version $targetVersion not found for prompt $promptId');
+    }
 
     return savePrompt(
       prompt.copyWith(content: historical.content),

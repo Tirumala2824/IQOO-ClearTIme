@@ -189,22 +189,26 @@ class _PromptManagerScreenState extends ConsumerState<PromptManagerScreen> {
               }).toList(),
             ),
             const Divider(height: 24),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              runSpacing: 8,
               children: [
                 IconButton(
                   icon: const Icon(Icons.restore_rounded, size: 20),
                   tooltip: 'Reset to Default Template',
                   onPressed: () => _resetPrompt(prompt.type),
                 ),
-                Row(
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
                   children: [
                     TextButton.icon(
                       icon: const Icon(Icons.copy_rounded, size: 16),
                       label: const Text('Duplicate'),
                       onPressed: () => _duplicatePrompt(prompt.id),
                     ),
-                    const SizedBox(width: 8),
                     ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppTheme.parentSecondary,

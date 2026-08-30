@@ -44,7 +44,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       final state = ref.read(parentDashboardControllerProvider);
       if (state.allFamilies.isNotEmpty && mounted) {
         setState(() {
-          _selectedExistingFamilyId = state.family?.id ?? state.allFamilies.first.id;
+          _selectedExistingFamilyId = state.family?.id ?? state.allFamilies.firstOrNull?.id;
         });
       }
     }
@@ -64,13 +64,14 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         user = await ref.read(authRepositoryProvider).getCurrentUserProfile();
       }
     }
-    if (user == null || _selectedExistingFamilyId == null) return;
-
     final parentState = ref.read(parentDashboardControllerProvider);
-    final chosenFamily = parentState.allFamilies.firstWhere(
-      (f) => f.id == _selectedExistingFamilyId,
-      orElse: () => parentState.allFamilies.first,
-    );
+    if (user == null || _selectedExistingFamilyId == null || parentState.allFamilies.isEmpty) return;
+
+    final chosenFamily = parentState.allFamilies
+            .where((f) => f.id == _selectedExistingFamilyId)
+            .firstOrNull ??
+        parentState.allFamilies.firstOrNull;
+    if (chosenFamily == null) return;
 
     await ref
         .read(parentDashboardControllerProvider.notifier)
@@ -220,7 +221,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                             initialValue: _selectedExistingFamilyId ??
                                 (existingFamilies.any((f) => f.id == parentState.family?.id)
                                     ? parentState.family?.id
-                                    : existingFamilies.first.id),
+                                    : existingFamilies.firstOrNull?.id),
                             decoration: const InputDecoration(
                               labelText: 'Active Family',
                               prefixIcon: Icon(Icons.diversity_3_outlined),

@@ -162,10 +162,10 @@ class ReportSchedulerService {
     // 4. Local Report Builder with Privacy Filter
     final allowedCategories = config.allowedCategories
         .map((cat) {
-          return ReportCategory.values.firstWhere(
-            (c) => c.name.toLowerCase() == cat.toLowerCase(),
-            orElse: () => ReportCategory.overallUsage,
-          );
+          return ReportCategory.values
+                  .where((c) => c.name.toLowerCase() == cat.toLowerCase())
+                  .firstOrNull ??
+              ReportCategory.overallUsage;
         })
         .toSet();
 

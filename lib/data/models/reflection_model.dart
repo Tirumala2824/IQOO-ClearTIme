@@ -60,10 +60,10 @@ class DailyReflection {
       DailyReflection(
         id: json['id'] as String,
         date: DateTime.parse(json['date'] as String),
-        mood: ReflectionMood.values.firstWhere(
-          (m) => m.name == json['mood'],
-          orElse: () => ReflectionMood.productive,
-        ),
+        mood: ReflectionMood.values
+                .where((m) => m.name == json['mood'])
+                .firstOrNull ??
+            ReflectionMood.productive,
         notes: json['notes'] as String?,
         createdAt: DateTime.parse(json['createdAt'] as String),
       );

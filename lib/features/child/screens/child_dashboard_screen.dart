@@ -64,12 +64,10 @@ class _ChildDashboardScreenState extends ConsumerState<ChildDashboardScreen> {
     final usage = childState.usageSummary;
     final reflection = childState.todayReflection;
     final activeGoal = childState.activeAIGoal ??
-        (childState.goals.isNotEmpty
-            ? childState.goals.firstWhere(
-                (g) => g.status == GoalStatus.active,
-                orElse: () => childState.goals.first,
-              )
-            : null);
+        (childState.goals
+                .where((g) => g.status == GoalStatus.active)
+                .firstOrNull ??
+            childState.goals.firstOrNull);
 
     final childName = profile?.nickname ?? "there";
 
@@ -272,11 +270,9 @@ class _ChildDashboardScreenState extends ConsumerState<ChildDashboardScreen> {
               Builder(
                 builder: (context) {
                   final missionsState = ref.watch(childMissionsControllerProvider);
-                  final activeMission = missionsState.activeMissions.isNotEmpty
-                      ? missionsState.activeMissions.first
-                      : (missionsState.submittedMissions.isNotEmpty
-                          ? missionsState.submittedMissions.first
-                          : null);
+                  final activeMission =
+                      missionsState.activeMissions.firstOrNull ??
+                          missionsState.submittedMissions.firstOrNull;
 
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -284,12 +280,16 @@ class _ChildDashboardScreenState extends ConsumerState<ChildDashboardScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text(
-                            'Today\'s Activity Quest',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w800,
-                              color: AppColors.childTextDark,
+                          const Flexible(
+                            child: Text(
+                              'Today\'s Activity Quest',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.childTextDark,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                           if (missionsState.missions.isNotEmpty)
@@ -558,24 +558,31 @@ class _ChildDashboardScreenState extends ConsumerState<ChildDashboardScreen> {
   }) {
     return Expanded(
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, color: Colors.white70, size: 18),
           const SizedBox(height: 4),
-          Text(
-            value,
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w800,
-              fontSize: 15,
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              value,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
+                fontSize: 15,
+              ),
             ),
           ),
           const SizedBox(height: 2),
-          Text(
-            label,
-            style: const TextStyle(
-              color: Colors.white70,
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white70,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ],

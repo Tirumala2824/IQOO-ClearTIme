@@ -267,10 +267,10 @@ class PromptDefinition {
       PromptDefinition(
         id: json['id'] as String,
         name: json['name'] as String,
-        type: PromptType.values.firstWhere(
-          (t) => t.name == json['type'],
-          orElse: () => PromptType.childInsight,
-        ),
+        type: PromptType.values
+                .where((t) => t.name == json['type'])
+                .firstOrNull ??
+            PromptType.childInsight,
         content: json['content'] as String,
         version: (json['version'] as num? ?? 1).toInt(),
         isActive: json['isActive'] as bool? ?? true,
@@ -643,10 +643,10 @@ class ChildAgentAction {
 
   factory ChildAgentAction.fromJson(Map<String, dynamic> json) =>
       ChildAgentAction(
-        type: ChildAgentActionType.values.firstWhere(
-          (e) => e.name == json['type'],
-          orElse: () => ChildAgentActionType.none,
-        ),
+        type: ChildAgentActionType.values
+                .where((e) => e.name == json['type'])
+                .firstOrNull ??
+            ChildAgentActionType.none,
         title: json['title'] as String? ?? '',
         description: json['description'] as String? ?? '',
         targetMinutes: json['targetMinutes'] as int?,

@@ -123,7 +123,7 @@ class _PromptEditorScreenState extends ConsumerState<PromptEditorScreen> {
     if (!validation.isValid) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(validation.errors.first),
+          content: Text(validation.errors.firstOrNull ?? 'Invalid prompt configuration'),
           backgroundColor: AppTheme.errorRed,
         ),
       );

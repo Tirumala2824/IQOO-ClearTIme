@@ -160,6 +160,40 @@ class ChildAiCoachController extends StateNotifier<ChildAiCoachState> {
     );
   }
 
+  Future<String?> claimDailyQuest() async {
+    final dashState = _ref.read(childDashboardControllerProvider);
+    final profile = dashState.profile;
+    final family = dashState.family;
+    if (profile == null || family == null) {
+      return 'Join a family first to claim daily AI quests!';
+    }
+
+    try {
+      final engine = _ref.read(autonomousAgentEngineProvider);
+      final mission = await engine.claimDailyAiQuest(
+        familyId: family.id,
+        childId: profile.id,
+        childName: profile.nickname,
+      );
+
+      final missionRepo = _ref.read(localMissionRepositoryProvider);
+      final updatedMissions = await missionRepo.getMissions(childId: profile.id);
+      _ref.read(childDashboardControllerProvider.notifier).updateMissionsLocally(updatedMissions);
+
+      final buddyMsg = ChatMessage(
+        id: 'msg-${DateTime.now().millisecondsSinceEpoch}',
+        text: '🎉 Awesome! I created your daily activity: "${mission.title}" (${mission.targetMinutes}m). Check it out in your Activities tab!',
+        isUser: false,
+        timestamp: DateTime.now(),
+      );
+      state = state.copyWith(messages: [...state.messages, buddyMsg]);
+
+      return 'Created activity: ${mission.title} (${mission.targetMinutes}m)';
+    } catch (e) {
+      return 'Could not create activity right now: $e';
+    }
+  }
+
   void clearConversationHistory() {
     state = ChildAiCoachState(
       messages: [],

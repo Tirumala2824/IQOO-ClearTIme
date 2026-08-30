@@ -87,10 +87,10 @@ class _ParentReportCompareScreenState
       );
     }
 
-    final activeChild = children.firstWhere(
-      (c) => c.id == _selectedChildId,
-      orElse: () => children.first,
-    );
+    final activeChild = children
+            .where((c) => c.id == _selectedChildId)
+            .firstOrNull ??
+        children.firstOrNull!;
 
     return Scaffold(
       appBar: AppBar(
@@ -132,14 +132,14 @@ class _ParentReportCompareScreenState
             );
           }
 
-          final reportA = reports.firstWhere(
-            (r) => r.id == _selectedReportIdA,
-            orElse: () => reports[0],
-          );
-          final reportB = reports.firstWhere(
-            (r) => r.id == _selectedReportIdB,
-            orElse: () => reports.length > 1 ? reports[1] : reports[0],
-          );
+          final reportA = reports
+                  .where((r) => r.id == _selectedReportIdA)
+                  .firstOrNull ??
+              reports[0];
+          final reportB = reports
+                  .where((r) => r.id == _selectedReportIdB)
+                  .firstOrNull ??
+              (reports.length > 1 ? reports[1] : reports[0]);
 
           final comparison = comparisonService.comparePair(
             current: reportA,

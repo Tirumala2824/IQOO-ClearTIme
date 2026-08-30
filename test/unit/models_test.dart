@@ -7,6 +7,12 @@ import 'package:cleartime/data/models/report_config_model.dart';
 import 'package:cleartime/data/models/trigger_config_model.dart';
 import 'package:cleartime/data/models/notification_pref_model.dart';
 import 'package:cleartime/data/models/privacy_setting_model.dart';
+import 'package:cleartime/data/models/mission_model.dart';
+import 'package:cleartime/data/models/reward_model.dart';
+import 'package:cleartime/data/models/reflection_model.dart';
+import 'package:cleartime/data/models/achievement_model.dart';
+import 'package:cleartime/data/models/agent_action_log_model.dart';
+import 'package:cleartime/data/models/goal_model.dart';
 
 void main() {
   group('Data Models Unit Tests', () {
@@ -178,6 +184,63 @@ void main() {
       final json = notif.toJson();
       expect(json['quiet_hours_start'], equals('21:00'));
       expect(json['daily_summary'], isTrue);
+    });
+
+    test('Null-safe enum parsing and fallbacks across all models', () {
+      // 1. MissionStatus & ProofRequirement
+      expect(MissionStatus.fromString(null), equals(MissionStatus.assigned));
+      expect(MissionStatus.fromString('unknown_status'), equals(MissionStatus.assigned));
+      expect(ProofRequirement.fromString(null), equals(ProofRequirement.noProof));
+      expect(ProofRequirement.fromString('unknown_proof'), equals(ProofRequirement.noProof));
+
+      // 2. RewardStatus
+      expect(RewardStatus.fromString(null), equals(RewardStatus.locked));
+      expect(RewardStatus.fromString('invalid_reward_state'), equals(RewardStatus.locked));
+
+      // 3. DailyReflection
+      final reflection = DailyReflection.fromJson({
+        'id': 'r1',
+        'date': '2026-08-30T00:00:00.000Z',
+        'mood': 'non_existent_mood',
+        'createdAt': '2026-08-30T00:00:00.000Z',
+      });
+      expect(reflection.mood, equals(ReflectionMood.productive));
+
+      // 4. Achievement
+      final achievement = ChildAchievement.fromJson({
+        'id': 'a1',
+        'title': 'Test',
+        'description': 'Test badge',
+        'icon': 'star',
+        'type': 'unsupported_type',
+        'requirementValue': 5,
+        'requirementLabel': '5 days',
+      });
+      expect(achievement.type, equals(AchievementType.focusStarter));
+
+      // 5. AgentActionLog
+      final actionLog = AgentActionLog.fromJson({
+        'id': 'log1',
+        'title': 'Heartbeat',
+        'actionType': 'unknown_action',
+        'status': 'unknown_status',
+      });
+      expect(actionLog.actionType, equals(AgentActionType.systemHeartbeat));
+      expect(actionLog.status, equals(AgentActionStatus.success));
+
+      // 6. ChildGoal
+      final goal = ChildGoal.fromJson({
+        'id': 'g1',
+        'title': 'Goal',
+        'description': 'Focus',
+        'targetMinutes': 30,
+        'type': 'unknown_goal_type',
+        'status': 'unknown_goal_status',
+        'source': 'unknown_source',
+      });
+      expect(goal.type, equals(GoalType.dailyFocus));
+      expect(goal.status, equals(GoalStatus.active));
+      expect(goal.source, equals(GoalSource.userCreated));
     });
   });
 }

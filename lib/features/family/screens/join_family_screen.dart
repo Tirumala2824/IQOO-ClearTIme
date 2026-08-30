@@ -167,7 +167,7 @@ class _JoinFamilyScreenState extends ConsumerState<JoinFamilyScreen> {
                                   });
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
-                                      content: Text('QR Code scanned: $parsed 🎉'),
+                                      content: Text('QR Code detected: $parsed 🎉'),
                                       backgroundColor: AppTheme.childSecondary,
                                       duration: const Duration(seconds: 2),
                                     ),
@@ -309,16 +309,18 @@ class _JoinFamilyScreenState extends ConsumerState<JoinFamilyScreen> {
                       ),
                 ),
                 const SizedBox(height: 10),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 10,
+                  alignment: WrapAlignment.center,
                   children: List.generate(_avatarIcons.length, (index) {
                     final isSelected = _selectedAvatarIndex == index;
                     return GestureDetector(
                       onTap: () => setState(() => _selectedAvatarIndex = index),
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 200),
-                        width: 46,
-                        height: 46,
+                        width: 44,
+                        height: 44,
                         decoration: BoxDecoration(
                           color: isSelected
                               ? AppTheme.childPrimary
@@ -333,7 +335,7 @@ class _JoinFamilyScreenState extends ConsumerState<JoinFamilyScreen> {
                           _avatarIcons[index],
                           color:
                               isSelected ? Colors.white : AppTheme.neutralMuted,
-                          size: 24,
+                          size: 22,
                         ),
                       ),
                     );

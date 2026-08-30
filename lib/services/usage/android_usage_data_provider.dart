@@ -132,7 +132,7 @@ class AndroidUsageDataProvider implements UsageDataProvider {
       changePct = ((totalMinutes - yestTotal) / yestTotal) * 100.0;
     }
 
-    return UsageSummary(
+    final summary = UsageSummary(
       totalMinutes: totalMinutes,
       focusMinutes: focusMinutes,
       breakCount: calculatedBreaks,
@@ -141,6 +141,25 @@ class AndroidUsageDataProvider implements UsageDataProvider {
       categories: categories,
       topApps: topApps,
     );
+
+    // Persist today's aggregate locally for reports and analytics
+    final store = _usageStore;
+    if (store != null) {
+      final dateStr = '${now.year.toString().padLeft(4, '0')}-'
+          '${now.month.toString().padLeft(2, '0')}-'
+          '${now.day.toString().padLeft(2, '0')}';
+      await store.saveDailyAggregate(DailyAggregate(
+        dateString: dateStr,
+        totalMinutes: totalMinutes,
+        focusMinutes: focusMinutes,
+        breakCount: calculatedBreaks,
+        unlockCount: unlockCount,
+        categoryMinutes: catMap,
+        calculatedAt: DateTime.now(),
+      ));
+    }
+
+    return summary;
   }
 
   /// Builds real per-day aggregates for the requested recent days and

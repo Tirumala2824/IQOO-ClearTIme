@@ -55,7 +55,7 @@ class AiMissionGeneratorService {
       category: 'Creativity',
     ),
     GeneratedMissionIdea(
-      title: 'Outdoor Explorer & Bike Sprint',
+      title: 'Outdoor Adventure & Bike Sprint',
       description: 'Go outside for a walk, bicycle ride, or outdoor sport in the fresh air.',
       targetMinutes: 45,
       suggestedReward: 'Pick tonight\'s family dinner or snack',

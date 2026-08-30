@@ -30,7 +30,7 @@ class _ParentTriggersScreenState extends ConsumerState<ParentTriggersScreen> {
 
     TriggerType selectedType = TriggerType.usageIncrease;
     double threshold = 20.0;
-    String selectedChildId = children.isNotEmpty ? children.first.id : '';
+    String selectedChildId = children.firstOrNull?.id ?? '';
     Duration selectedCooldown = const Duration(hours: 24);
     NotificationType selectedNotif = NotificationType.push;
 
@@ -158,7 +158,7 @@ class _ParentTriggersScreenState extends ConsumerState<ParentTriggersScreen> {
                         DropdownButtonFormField<String>(
                           initialValue: selectedChildId.isNotEmpty
                               ? selectedChildId
-                              : children.first.id,
+                              : children.firstOrNull?.id,
                           decoration: const InputDecoration(
                             labelText: 'Assign to Child',
                             prefixIcon: Icon(Icons.person_outline_rounded),

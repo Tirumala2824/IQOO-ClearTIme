@@ -103,25 +103,38 @@ class _PromptComparisonScreenState
                             color: AppTheme.neutralMuted, fontSize: 13),
                       ),
                       const SizedBox(height: 20),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: _buildVersionCard(
-                              version: _verA!,
-                              isCurrent:
-                                  _verA!.version == _prompt?.version,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: _buildVersionCard(
-                              version: _verB!,
-                              isCurrent:
-                                  _verB!.version == _prompt?.version,
-                            ),
-                          ),
-                        ],
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          final isNarrow = constraints.maxWidth < 400;
+                          final cardA = _buildVersionCard(
+                            version: _verA!,
+                            isCurrent: _verA!.version == _prompt?.version,
+                          );
+                          final cardB = _buildVersionCard(
+                            version: _verB!,
+                            isCurrent: _verB!.version == _prompt?.version,
+                          );
+
+                          if (isNarrow) {
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                cardA,
+                                const SizedBox(height: 12),
+                                cardB,
+                              ],
+                            );
+                          }
+
+                          return Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(child: cardA),
+                              const SizedBox(width: 12),
+                              Expanded(child: cardB),
+                            ],
+                          );
+                        },
                       ),
                     ],
                   ),
@@ -145,8 +158,11 @@ class _PromptComparisonScreenState
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 6,
+              runSpacing: 4,
               children: [
                 Text(
                   'Version ${version.version}',

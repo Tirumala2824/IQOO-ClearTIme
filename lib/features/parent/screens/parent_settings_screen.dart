@@ -99,6 +99,75 @@ class ParentSettingsScreen extends ConsumerWidget {
 
           const SizedBox(height: 16),
           const Text(
+            'Family Space & Hub Management',
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: 14.5,
+              color: AppColors.parentTextDark,
+            ),
+          ),
+          const SizedBox(height: 8),
+          AppCard(
+            padding: EdgeInsets.zero,
+            child: Column(
+              children: [
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.parentPrimary.withAlpha((0.12 * 255).round()),
+                      borderRadius: BorderRadius.circular(AppRadius.sm),
+                    ),
+                    child: const Icon(Icons.hub_rounded,
+                        color: AppColors.parentPrimary, size: 22),
+                  ),
+                  title: Text(
+                    family?.name ?? 'Active Family Space',
+                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5),
+                  ),
+                  subtitle: Text(
+                    '${parentState.children.length} linked children · ${parentState.allFamilies.length} family spaces',
+                    style: const TextStyle(color: AppColors.neutralMuted, fontSize: 12),
+                  ),
+                  trailing: const Icon(Icons.edit_rounded,
+                      size: 18, color: AppColors.parentPrimary),
+                  onTap: () {
+                    if (family == null || user == null) return;
+                    _showRenameDialog(context, ref, family, user.id);
+                  },
+                ),
+                if (family != null) ...[
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.alertRed.withAlpha((0.12 * 255).round()),
+                        borderRadius: BorderRadius.circular(AppRadius.sm),
+                      ),
+                      child: const Icon(Icons.delete_forever_rounded,
+                          color: AppColors.alertRed, size: 22),
+                    ),
+                    title: const Text(
+                      'Delete Family Space',
+                      style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5, color: AppColors.alertRed),
+                    ),
+                    subtitle: const Text(
+                      'Permanently remove this family space and all linked missions/reports',
+                      style: TextStyle(color: AppColors.neutralMuted, fontSize: 12),
+                    ),
+                    onTap: () {
+                      if (user == null) return;
+                      _showDeleteFamilyDialog(context, ref, family, user.id);
+                    },
+                  ),
+                ],
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 16),
+          const Text(
             'Smart Features & Configurations',
             style: TextStyle(
               fontWeight: FontWeight.w800,
@@ -298,6 +367,111 @@ class ParentSettingsScreen extends ConsumerWidget {
             },
           ),
           const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+
+  void _showRenameDialog(BuildContext context, WidgetRef ref, dynamic family, String userId) {
+    final controller = TextEditingController(text: family.name as String);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.lg)),
+        title: const Row(
+          children: [
+            Icon(Icons.edit_rounded, color: AppColors.parentPrimary),
+            SizedBox(width: 8),
+            Flexible(child: Text('Rename Family Space', style: TextStyle(fontWeight: FontWeight.w700))),
+          ],
+        ),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: 'New Family Name',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.parentPrimary,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () async {
+              final name = controller.text.trim();
+              if (name.isNotEmpty) {
+                Navigator.pop(ctx);
+                final success = await ref
+                    .read(parentDashboardControllerProvider.notifier)
+                    .renameFamily(family.id as String, name, userId);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(success ? 'Family renamed to "$name"' : 'Failed to rename family.'),
+                      backgroundColor: success ? AppColors.successGreen : AppColors.alertRed,
+                    ),
+                  );
+                }
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDeleteFamilyDialog(BuildContext context, WidgetRef ref, dynamic family, String userId) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.lg)),
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: AppColors.alertRed),
+            SizedBox(width: 8),
+            Flexible(child: Text('Delete Family Space', style: TextStyle(fontWeight: FontWeight.w700))),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to permanently delete "${family.name}"? All associated missions, reports, triggers, and child profiles in this space will be deleted permanently. This action cannot be undone.',
+          style: const TextStyle(fontSize: 14, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.alertRed,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final success = await ref
+                  .read(parentDashboardControllerProvider.notifier)
+                  .deleteCurrentFamily(family.id as String, userId);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      success
+                          ? 'Family "${family.name}" has been permanently deleted.'
+                          : 'Failed to delete family.',
+                    ),
+                    backgroundColor: success ? AppColors.successGreen : AppColors.alertRed,
+                  ),
+                );
+              }
+            },
+            child: const Text('Delete Permanently'),
+          ),
         ],
       ),
     );

@@ -21,9 +21,12 @@ class LocalModelManager {
   Future<List<LocalModelCatalogEntry>> getInstalledModels() async {
     final models = await _llmProvider.getInstalledModels();
     final settings = await _settingsRepo.getSettings();
+    final activeId = settings.activeModelId.isNotEmpty
+        ? settings.activeModelId
+        : (models.isNotEmpty ? models.first.id : '');
 
     return models.map((m) {
-      return m.copyWith(isActive: m.id == settings.activeModelId);
+      return m.copyWith(isActive: m.id == activeId);
     }).toList();
   }
 

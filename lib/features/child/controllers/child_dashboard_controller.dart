@@ -19,6 +19,9 @@ import '../../../services/llm/local_ai_activity_service.dart';
 import '../../../services/realtime/mission_realtime_service.dart';
 import '../../../services/analytics/report_request_service.dart';
 import '../../../services/analytics/report_scheduler_service.dart';
+import '../../../services/analytics/child_report_builder.dart';
+import '../../../services/analytics/approved_report_sync_service.dart';
+import '../../../data/repositories/approved_report_repository.dart';
 
 class ChildDashboardState {
   final ChildProfile? profile;
@@ -130,6 +133,8 @@ class ChildDashboardController extends StateNotifier<ChildDashboardState> {
   final LocalAiActivityService? _aiActivityService;
   final ReportRequestService? _reportRequestService;
   final ReportSchedulerService? _reportScheduler;
+  final ApprovedReportRepository? _reportRepo;
+  final ApprovedReportSyncService? _syncService;
   bool _realtimeSubscribed = false;
 
   ChildDashboardController({
@@ -144,6 +149,8 @@ class ChildDashboardController extends StateNotifier<ChildDashboardState> {
     LocalAiActivityService? aiActivityService,
     ReportRequestService? reportRequestService,
     ReportSchedulerService? reportScheduler,
+    ApprovedReportRepository? reportRepo,
+    ApprovedReportSyncService? syncService,
   })  : _familyRepository = familyRepository,
         _usageDataProvider = usageDataProvider,
         _missionRepository = missionRepository,
@@ -155,6 +162,8 @@ class ChildDashboardController extends StateNotifier<ChildDashboardState> {
         _aiActivityService = aiActivityService,
         _reportRequestService = reportRequestService,
         _reportScheduler = reportScheduler,
+        _reportRepo = reportRepo,
+        _syncService = syncService,
         super(const ChildDashboardState());
 
   Future<void> loadDashboard(String userId) async {
@@ -220,13 +229,67 @@ class ChildDashboardController extends StateNotifier<ChildDashboardState> {
 
       _subscribeRealtime(profile);
 
+      // Auto-generate and sync approved reports from live device usage
+      if (accessState == UsageAccessState.ready && profile != null && family != null) {
+        await _autoSyncApprovedReports(profile, family, usageSummary);
+      }
+
       // Process any pending parent report requests queued for this device.
-      // Requests stay queued until this device is online; each is completed
-      // with a truthful ready/unavailable outcome.
       await _processPendingReportRequests(profile);
     } catch (e) {
       state = state.copyWith(isLoading: false, errorMessage: e.toString());
     }
+  }
+
+  Future<void> _autoSyncApprovedReports(
+    ChildProfile profile,
+    Family family,
+    UsageSummary todayUsage,
+  ) async {
+    final reportRepo = _reportRepo;
+    final syncService = _syncService;
+    if (reportRepo == null) return;
+
+    try {
+      final weeklyUsage = await _usageDataProvider.getWeeklyUsage();
+      final now = DateTime.now();
+
+      final currentDaily = DailyUsage(
+        date: DateTime(now.year, now.month, now.day),
+        totalMinutes: todayUsage.totalMinutes,
+        focusMinutes: todayUsage.focusMinutes,
+        unlockCount: todayUsage.screenUnlockCount,
+        categoryMinutes: {for (var c in todayUsage.categories) c.category: c.totalMinutes},
+      );
+
+      final builder = const ChildReportBuilder();
+      final dailyReport = builder.buildDailyReport(
+        childId: profile.id,
+        childNickname: profile.nickname,
+        familyId: family.id,
+        date: now,
+        currentDaily: currentDaily,
+        focusMinutes: todayUsage.focusMinutes,
+        breakCount: todayUsage.breakCount,
+      );
+
+      final weeklyReport = builder.buildWeeklyReport(
+        childId: profile.id,
+        childNickname: profile.nickname,
+        familyId: family.id,
+        weekStart: now.subtract(const Duration(days: 7)),
+        weekEnd: now,
+        dailyUsages: weeklyUsage,
+      );
+
+      await reportRepo.saveApprovedReport(dailyReport);
+      await reportRepo.saveApprovedReport(weeklyReport);
+
+      if (syncService != null) {
+        await syncService.pushSnapshot(dailyReport);
+        await syncService.pushSnapshot(weeklyReport);
+      }
+    } catch (_) {}
   }
 
   Future<void> _processPendingReportRequests(ChildProfile? profile) async {
@@ -381,7 +444,7 @@ class ChildDashboardController extends StateNotifier<ChildDashboardState> {
   /// Re-checks usage access state after the user returns from system
   /// settings. Never opens the settings intent from here; the setup screen is
   /// the only entry point that requests access.
-Future<void> refreshUsageAccess() async {
+  Future<void> refreshUsageAccess() async {
     final accessState = await _usageDataProvider.getUsageAccessState();
     if (accessState == UsageAccessState.ready) {
       final usage = await _usageDataProvider.getTodayUsage();
@@ -389,6 +452,9 @@ Future<void> refreshUsageAccess() async {
         usageAccessState: accessState,
         usageSummary: usage,
       );
+      if (state.profile != null && state.family != null) {
+        await _autoSyncApprovedReports(state.profile!, state.family!, usage);
+      }
     } else {
       state = state.copyWith(usageAccessState: accessState);
     }
@@ -461,6 +527,8 @@ final childDashboardControllerProvider =
   final aiActivityService = ref.watch(localAiActivityServiceProvider);
   final reportRequestService = ref.watch(reportRequestServiceProvider);
   final reportScheduler = ref.watch(reportSchedulerServiceProvider);
+  final reportRepo = ref.watch(approvedReportRepositoryProvider);
+  final syncService = ref.watch(approvedReportSyncServiceProvider);
 
   return ChildDashboardController(
     familyRepository: familyRepo,
@@ -474,5 +542,7 @@ final childDashboardControllerProvider =
     aiActivityService: aiActivityService,
     reportRequestService: reportRequestService,
     reportScheduler: reportScheduler,
+    reportRepo: reportRepo,
+    syncService: syncService,
   );
 });

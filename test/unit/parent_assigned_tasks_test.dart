@@ -49,6 +49,9 @@ class TestFamilyRepository implements FamilyRepository {
   Future<void> deleteFamily(String familyId) async {}
 
   @override
+  Future<void> deleteChildProfile(String childId) async {}
+
+  @override
   Future<List<ChildProfile>> getChildrenForFamily(String familyId) async => [
         ChildProfile(id: 'child-1', userId: 'u-c1', familyId: familyId, nickname: 'Alex', createdAt: DateTime.now()),
       ];

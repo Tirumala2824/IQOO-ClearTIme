@@ -57,6 +57,7 @@ import '../../services/coaching/coaching_goal_generator.dart';
 import '../../services/coaching/coaching_loop_service.dart';
 import '../../services/realtime/mission_realtime_service.dart';
 import '../../services/storage/proof_storage_service.dart';
+import '../../services/agent/autonomous_agent_engine.dart';
 
 // --- Phase 1 Repositories ---
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
@@ -376,6 +377,22 @@ final coachingLoopServiceProvider = Provider<CoachingLoopService>((ref) {
     patternService: patternService,
     goalGenerator: goalGenerator,
     goalRepo: goalRepo,
+    store: store,
+  );
+});
+
+// --- Phase 7 Autonomous AI Agent Engine Provider ---
+
+final autonomousAgentEngineProvider = Provider<AutonomousAgentEngine>((ref) {
+  final missionRepo = ref.watch(localMissionRepositoryProvider);
+  final configRepo = ref.watch(configurationRepositoryProvider);
+  final reportRepo = ref.watch(approvedReportRepositoryProvider);
+  final store = ref.watch(encryptedDeviceStoreProvider);
+
+  return AutonomousAgentEngine(
+    missionRepo: missionRepo,
+    configRepo: configRepo,
+    reportRepo: reportRepo,
     store: store,
   );
 });

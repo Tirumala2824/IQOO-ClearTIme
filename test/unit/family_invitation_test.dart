@@ -57,6 +57,9 @@ class MockFamilyRepository implements FamilyRepository {
   Future<void> deleteFamily(String familyId) async {}
 
   @override
+  Future<void> deleteChildProfile(String childId) async {}
+
+  @override
   Future<List<ChildProfile>> getChildrenForFamily(String familyId) async => [];
 
   @override

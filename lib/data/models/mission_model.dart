@@ -31,10 +31,10 @@ enum MissionStatus {
     if (name == 'completed') return MissionStatus.approved;
     if (name == 'needsRetry') return MissionStatus.needsRetry;
     if (name == 'needs_retry') return MissionStatus.needsRetry;
-    return MissionStatus.values.firstWhere(
-      (s) => s.name == name,
-      orElse: () => MissionStatus.assigned,
-    );
+    return MissionStatus.values
+            .where((s) => s.name == name)
+            .firstOrNull ??
+        MissionStatus.assigned;
   }
 }
 
@@ -67,10 +67,10 @@ enum ProofRequirement {
     if (name == 'photo_video_parent_approval') {
       return ProofRequirement.photoVideoParentApproval;
     }
-    return ProofRequirement.values.firstWhere(
-      (p) => p.name == name,
-      orElse: () => ProofRequirement.noProof,
-    );
+    return ProofRequirement.values
+            .where((p) => p.name == name)
+            .firstOrNull ??
+        ProofRequirement.noProof;
   }
 }
 
@@ -251,17 +251,17 @@ class ChildMission {
         title: json['title'] as String,
         description: json['description'] as String? ?? '',
         source: json['source'] != null
-            ? MissionSource.values.firstWhere(
-                (s) => s.name == json['source'],
-                orElse: () => MissionSource.parent,
-              )
+            ? (MissionSource.values
+                    .where((s) => s.name == json['source'])
+                    .firstOrNull ??
+                MissionSource.parent)
             : (json['type'] == MissionType.localAi.name
                 ? MissionSource.localAi
                 : MissionSource.parent),
-        type: MissionType.values.firstWhere(
-          (t) => t.name == json['type'],
-          orElse: () => MissionType.parentAssigned,
-        ),
+        type: MissionType.values
+                .where((t) => t.name == json['type'])
+                .firstOrNull ??
+            MissionType.parentAssigned,
         targetMinutes: (json['targetMinutes'] as num? ?? 1).toInt(),
         currentMinutes: (json['currentMinutes'] as num? ?? 0).toInt(),
         status: MissionStatus.fromString(json['status'] as String?),

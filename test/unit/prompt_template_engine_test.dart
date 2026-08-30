@@ -63,7 +63,7 @@ void main() {
       const template = 'Hi {{child_name}}, your screen time was {{screen_time}}.';
       final rendered = engine.render(template, {});
 
-      expect(rendered, contains('Explorer'));
+      expect(rendered, contains('your child'));
       expect(rendered, contains('0 min'));
     });
   });

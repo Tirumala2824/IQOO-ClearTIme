@@ -214,10 +214,10 @@ class ApprovedInsight {
   factory ApprovedInsight.fromJson(Map<String, dynamic> json) =>
       ApprovedInsight(
         id: json['id'] as String,
-        type: InsightType.values.firstWhere(
-          (t) => t.name == json['type'],
-          orElse: () => InsightType.fact,
-        ),
+        type: InsightType.values
+                .where((t) => t.name == json['type'])
+                .firstOrNull ??
+            InsightType.fact,
         category: ReportCategory.fromString(json['category'] as String? ?? ''),
         title: json['title'] as String,
         description: json['description'] as String,

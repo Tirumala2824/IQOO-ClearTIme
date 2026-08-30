@@ -87,14 +87,14 @@ class DetectedPattern {
   factory DetectedPattern.fromJson(Map<String, dynamic> json) =>
       DetectedPattern(
         id: json['id'] as String,
-        type: PatternType.values.firstWhere(
-          (t) => t.name == json['type'],
-          orElse: () => PatternType.neutral,
-        ),
-        category: PatternCategory.values.firstWhere(
-          (c) => c.name == json['category'],
-          orElse: () => PatternCategory.screenTotal,
-        ),
+        type: PatternType.values
+                .where((t) => t.name == json['type'])
+                .firstOrNull ??
+            PatternType.neutral,
+        category: PatternCategory.values
+                .where((c) => c.name == json['category'])
+                .firstOrNull ??
+            PatternCategory.screenTotal,
         title: json['title'] as String? ?? '',
         description: json['description'] as String? ?? '',
         suggestedAction: json['suggestedAction'] as String? ?? '',
@@ -177,10 +177,10 @@ class GoalEvaluation {
   factory GoalEvaluation.fromJson(Map<String, dynamic> json) =>
       GoalEvaluation(
         goalId: json['goalId'] as String,
-        result: EvaluationResult.values.firstWhere(
-          (r) => r.name == json['result'],
-          orElse: () => EvaluationResult.notYetEvaluated,
-        ),
+        result: EvaluationResult.values
+                .where((r) => r.name == json['result'])
+                .firstOrNull ??
+            EvaluationResult.notYetEvaluated,
         score: (json['score'] as num? ?? 0).toInt(),
         feedbackMessage: json['feedbackMessage'] as String? ?? '',
         targetValue: (json['targetValue'] as num? ?? 0).toInt(),
@@ -360,10 +360,10 @@ class CoachingSession {
             ? GoalEvaluation.fromJson(
                 json['previousGoalEvaluation'] as Map<String, dynamic>)
             : null,
-        status: CoachingSessionStatus.values.firstWhere(
-          (s) => s.name == json['status'],
-          orElse: () => CoachingSessionStatus.complete,
-        ),
+        status: CoachingSessionStatus.values
+                .where((s) => s.name == json['status'])
+                .firstOrNull ??
+            CoachingSessionStatus.complete,
         createdAt: json['createdAt'] != null
             ? DateTime.parse(json['createdAt'] as String)
             : DateTime.now(),

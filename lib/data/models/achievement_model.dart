@@ -81,10 +81,10 @@ class ChildAchievement {
         title: json['title'] as String,
         description: json['description'] as String,
         icon: json['icon'] as String,
-        type: AchievementType.values.firstWhere(
-          (t) => t.name == json['type'],
-          orElse: () => AchievementType.focusStarter,
-        ),
+        type: AchievementType.values
+                .where((t) => t.name == json['type'])
+                .firstOrNull ??
+            AchievementType.focusStarter,
         isUnlocked: json['isUnlocked'] as bool? ?? false,
         unlockedAt: json['unlockedAt'] != null
             ? DateTime.parse(json['unlockedAt'] as String)

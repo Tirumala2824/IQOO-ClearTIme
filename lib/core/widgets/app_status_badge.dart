@@ -120,13 +120,17 @@ class AppStatusBadge extends StatelessWidget {
         children: [
           Icon(effectiveIcon, size: fontSize + 2, color: effectiveFg),
           const SizedBox(width: 5),
-          Text(
-            label,
-            style: TextStyle(
-              color: effectiveFg,
-              fontSize: fontSize,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.2,
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: effectiveFg,
+                fontSize: fontSize,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.2,
+              ),
             ),
           ),
         ],

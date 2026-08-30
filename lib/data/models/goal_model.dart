@@ -115,26 +115,28 @@ class ChildGoal {
         id: json['id'] as String,
         title: json['title'] as String,
         description: json['description'] as String,
-        type: GoalType.values.firstWhere(
-          (t) => t.name == json['type'],
-          orElse: () => GoalType.dailyFocus,
-        ),
+        type: GoalType.values
+                .where((t) => t.name == json['type'])
+                .firstOrNull ??
+            GoalType.dailyFocus,
         targetMinutes: (json['targetMinutes'] as num).toInt(),
         currentMinutes: (json['currentMinutes'] as num? ?? 0).toInt(),
-        status: GoalStatus.values.firstWhere(
-          (s) => s.name == json['status'],
-          orElse: () => GoalStatus.active,
-        ),
-        source: GoalSource.values.firstWhere(
-          (s) => s.name == (json['source'] as String?),
-          orElse: () => GoalSource.userCreated,
-        ),
+        status: GoalStatus.values
+                .where((s) => s.name == json['status'])
+                .firstOrNull ??
+            GoalStatus.active,
+        source: GoalSource.values
+                .where((s) => s.name == (json['source'] as String?))
+                .firstOrNull ??
+            GoalSource.userCreated,
         evaluationResult: json['evaluationResult'] as String?,
         relatedPattern: json['relatedPattern'] as String?,
         expiresAt: json['expiresAt'] != null
             ? DateTime.parse(json['expiresAt'] as String)
             : null,
-        createdAt: DateTime.parse(json['createdAt'] as String),
+        createdAt: json['createdAt'] != null
+            ? DateTime.parse(json['createdAt'] as String)
+            : DateTime.now(),
         updatedAt: json['updatedAt'] != null
             ? DateTime.parse(json['updatedAt'] as String)
             : null,

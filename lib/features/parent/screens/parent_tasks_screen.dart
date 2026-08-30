@@ -70,10 +70,11 @@ class _ParentTasksScreenState extends ConsumerState<ParentTasksScreen>
       return;
     }
 
-    final targetChild = state.children.firstWhere(
-      (c) => c.id == _filterChildId,
-      orElse: () => state.children.first,
-    );
+    final targetChild = state.children
+            .where((c) => c.id == _filterChildId)
+            .firstOrNull ??
+        state.children.firstOrNull;
+    if (targetChild == null) return;
 
     showModalBottomSheet(
       context: context,

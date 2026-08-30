@@ -199,8 +199,12 @@ class FamilySelectorDropdown extends ConsumerWidget {
         if (user == null) return;
         if (value.startsWith('select:')) {
           final familyId = value.substring(7);
-          final match = allFamilies.firstWhere((f) => f.id == familyId, orElse: () => currentFamily!);
-          await ref.read(parentDashboardControllerProvider.notifier).switchFamily(match, user.id);
+          final matches = allFamilies.where((f) => f.id == familyId).toList();
+          if (matches.isNotEmpty) {
+            await ref.read(parentDashboardControllerProvider.notifier).switchFamily(matches.first, user.id);
+          } else if (currentFamily != null) {
+            await ref.read(parentDashboardControllerProvider.notifier).switchFamily(currentFamily, user.id);
+          }
         } else if (value == 'action:create') {
           _showCreateFamilyDialog(context, ref, user.id);
         } else if (value == 'action:join') {
@@ -232,53 +236,42 @@ class FamilySelectorDropdown extends ConsumerWidget {
           ),
         );
 
-        // List of families
-        if (allFamilies.isEmpty && currentFamily != null) {
+        // List of deduplicated families
+        final uniqueFamiliesMap = <String, Family>{};
+        for (final f in allFamilies) {
+          uniqueFamiliesMap[f.id] = f;
+        }
+        if (currentFamily != null) {
+          uniqueFamiliesMap[currentFamily.id] = currentFamily;
+        }
+        final uniqueFamilies = uniqueFamiliesMap.values.toList();
+
+        for (final f in uniqueFamilies) {
+          final isSelected = f.id == currentFamily?.id;
           items.add(
             PopupMenuItem<String>(
-              value: 'select:${currentFamily.id}',
+              value: 'select:${f.id}',
               child: Row(
                 children: [
-                  const Icon(Icons.check_circle_rounded, color: AppColors.parentPrimary, size: 20),
+                  Icon(
+                    isSelected ? Icons.check_circle_rounded : Icons.diversity_3_outlined,
+                    color: isSelected ? AppColors.parentPrimary : AppColors.neutralMuted,
+                    size: 20,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      currentFamily.name,
-                      style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.parentPrimary),
+                      f.name,
+                      style: TextStyle(
+                        fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                        color: isSelected ? AppColors.parentPrimary : AppColors.parentTextDark,
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
           );
-        } else {
-          for (final f in allFamilies) {
-            final isSelected = f.id == currentFamily?.id;
-            items.add(
-              PopupMenuItem<String>(
-                value: 'select:${f.id}',
-                child: Row(
-                  children: [
-                    Icon(
-                      isSelected ? Icons.check_circle_rounded : Icons.diversity_3_outlined,
-                      color: isSelected ? AppColors.parentPrimary : AppColors.neutralMuted,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        f.name,
-                        style: TextStyle(
-                          fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                          color: isSelected ? AppColors.parentPrimary : AppColors.parentTextDark,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }
         }
 
         items.add(const PopupMenuDivider());

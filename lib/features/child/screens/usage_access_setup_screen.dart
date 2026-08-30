@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/providers/providers.dart';
 import '../../../core/services/abstractions/usage_data_provider.dart';
 import '../../../core/theme/app_theme.dart';
+import '../controllers/child_dashboard_controller.dart';
 
 /// Intentional setup screen for Android Usage Access.
 ///
@@ -32,6 +33,9 @@ class _UsageAccessSetupScreenState extends ConsumerState<UsageAccessSetupScreen>
     final provider = ref.read(usageDataProvider);
     final state = await provider.getUsageAccessState();
     if (mounted) setState(() => _state = state);
+    if (state == UsageAccessState.ready) {
+      await ref.read(childDashboardControllerProvider.notifier).refreshUsageAccess();
+    }
   }
 
   Future<void> _openSettings() async {
