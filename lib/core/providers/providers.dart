@@ -38,6 +38,7 @@ import '../../services/analytics/approved_report_sync_service.dart';
 import '../../services/llm/on_device_llm_provider.dart';
 import '../../services/llm/local_ai_coach_service.dart';
 import '../../services/llm/parent_ai_service.dart';
+import '../../services/llm/ai_mission_generator_service.dart';
 import '../../services/llm/local_ai_context_builder.dart';
 import '../../services/llm/parent_ai_context_builder.dart';
 import '../../services/llm/prompt_template_engine.dart';
@@ -255,6 +256,12 @@ final parentAIServiceProvider = Provider<ParentAIService>((ref) {
     responseValidator: validator,
     fallbackService: fallback,
   );
+});
+
+final aiMissionGeneratorServiceProvider =
+    Provider<AiMissionGeneratorService>((ref) {
+  final llm = ref.watch(activeLlmProvider);
+  return AiMissionGeneratorService(llmProvider: llm);
 });
 
 // --- Phase 4 Parent Reports & Local Analytics Providers ---

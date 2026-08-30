@@ -2,9 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_routes.dart';
-import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_radius.dart';
+import '../../../core/widgets/app_button.dart';
+import '../../../core/widgets/app_card.dart';
+import '../../../core/widgets/app_empty_state.dart';
+import '../../../core/widgets/app_progress_bar.dart';
+import '../../../core/widgets/app_status_badge.dart';
 import '../../../data/models/goal_model.dart';
-import '../../../data/models/reflection_model.dart';
 import '../controllers/child_dashboard_controller.dart';
 import '../controllers/child_missions_controller.dart';
 import 'child_reflection_dialog.dart';
@@ -22,16 +27,17 @@ class _ChildDashboardScreenState extends ConsumerState<ChildDashboardScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       final childState = ref.read(childDashboardControllerProvider);
       final userId = childState.profile?.userId ?? '';
-      ref.read(childDashboardControllerProvider.notifier).loadDashboard(userId);
-      final profile = childState.profile;
-      if (profile != null) {
-        ref
-            .read(childMissionsControllerProvider.notifier)
-            .loadMissions(childId: profile.id);
-      }
+      await ref
+          .read(childDashboardControllerProvider.notifier)
+          .loadDashboard(userId);
+      final updatedProfile =
+          ref.read(childDashboardControllerProvider).profile;
+      await ref
+          .read(childMissionsControllerProvider.notifier)
+          .loadMissions(childId: updatedProfile?.id);
     });
   }
 
@@ -64,21 +70,19 @@ class _ChildDashboardScreenState extends ConsumerState<ChildDashboardScreen> {
                 orElse: () => childState.goals.first,
               )
             : null);
-    final patterns = childState.detectedPatterns;
 
     final childName = profile?.nickname ?? "there";
 
     return Scaffold(
-      backgroundColor: AppTheme.childSurface,
+      backgroundColor: AppColors.childSurface,
       appBar: AppBar(
-        backgroundColor: AppTheme.childSurface,
-        elevation: 0,
+        backgroundColor: AppColors.childSurface,
         title: Text(
           'Hey, $childName! 👋',
           style: const TextStyle(
             fontWeight: FontWeight.w800,
             fontSize: 22,
-            color: AppTheme.childTextDark,
+            color: AppColors.childTextDark,
           ),
         ),
         actions: [
@@ -89,7 +93,7 @@ class _ChildDashboardScreenState extends ConsumerState<ChildDashboardScreen> {
                     height: 18,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : const Icon(Icons.refresh_rounded, color: AppTheme.childPrimary),
+                : const Icon(Icons.refresh_rounded, color: AppColors.childPrimary),
             tooltip: 'Refresh',
             onPressed: () {
               ref
@@ -106,9 +110,11 @@ class _ChildDashboardScreenState extends ConsumerState<ChildDashboardScreen> {
           await ref
               .read(childDashboardControllerProvider.notifier)
               .loadDashboard(userId);
+          final updatedProfile =
+              ref.read(childDashboardControllerProvider).profile;
           await ref
               .read(childMissionsControllerProvider.notifier)
-              .loadMissions(childId: userId);
+              .loadMissions(childId: updatedProfile?.id);
         },
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
@@ -122,35 +128,29 @@ class _ChildDashboardScreenState extends ConsumerState<ChildDashboardScreen> {
                   padding: const EdgeInsets.all(16),
                   margin: const EdgeInsets.only(bottom: 16),
                   decoration: BoxDecoration(
-                    color: AppTheme.warningOrange.withAlpha((0.15 * 255).round()),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: AppTheme.warningOrange.withAlpha((0.4 * 255).round()),
-                    ),
+                    color: AppColors.warningOrangeLight,
+                    borderRadius: BorderRadius.circular(AppRadius.lg),
+                    border: Border.all(color: AppColors.warningOrange),
                   ),
                   child: Row(
                     children: [
                       const Icon(Icons.touch_app_rounded,
-                          color: AppTheme.warningOrange, size: 28),
+                          color: AppColors.warningOrange, size: 26),
                       const SizedBox(width: 12),
                       const Expanded(
                         child: Text(
-                          'Usage access is needed so ClearTime can build your '
-                          'activities and reports from real activity.',
+                          'Usage permission is needed to track your daily screen balance.',
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
+                            color: AppColors.parentTextDark,
                           ),
                         ),
                       ),
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppTheme.warningOrange,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
+                      AppButton(
+                        label: 'Setup',
+                        size: AppButtonSize.sm,
+                        customColor: AppColors.warningOrange,
                         onPressed: () async {
                           await context.push(AppRoutes.usageAccessSetup);
                           if (context.mounted) {
@@ -159,26 +159,25 @@ class _ChildDashboardScreenState extends ConsumerState<ChildDashboardScreen> {
                                 .refreshUsageAccess();
                           }
                         },
-                        child: const Text('Setup'),
                       ),
                     ],
                   ),
                 ),
               ],
 
-              // ─── 1. HERO WELLBEING BANNER ───
+              // 1. Hero Wellbeing Banner
               Container(
                 padding: const EdgeInsets.all(22),
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
-                    colors: [AppTheme.childPrimary, AppTheme.childSecondary],
+                    colors: [AppColors.childPrimary, AppColors.childSecondary],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
-                  borderRadius: BorderRadius.circular(24),
+                  borderRadius: BorderRadius.circular(AppRadius.xl),
                   boxShadow: [
                     BoxShadow(
-                      color: AppTheme.childPrimary.withAlpha((0.25 * 255).round()),
+                      color: AppColors.childPrimary.withAlpha((0.25 * 255).round()),
                       blurRadius: 16,
                       offset: const Offset(0, 8),
                     ),
@@ -191,7 +190,7 @@ class _ChildDashboardScreenState extends ConsumerState<ChildDashboardScreen> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         const Text(
-                          'TODAY\'S WELLBEING',
+                          'TODAY\'S BALANCE',
                           style: TextStyle(
                             color: Colors.white70,
                             fontWeight: FontWeight.w800,
@@ -200,18 +199,17 @@ class _ChildDashboardScreenState extends ConsumerState<ChildDashboardScreen> {
                           ),
                         ),
                         Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 4),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                           decoration: BoxDecoration(
                             color: Colors.white.withAlpha((0.2 * 255).round()),
-                            borderRadius: BorderRadius.circular(16),
+                            borderRadius: BorderRadius.circular(AppRadius.pill),
                           ),
                           child: Text(
                             '✓ ${childState.completedMissionsCount} activities finished',
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 12,
-                              fontWeight: FontWeight.bold,
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
                         ),
@@ -223,9 +221,9 @@ class _ChildDashboardScreenState extends ConsumerState<ChildDashboardScreen> {
                           usage.focusMinutes, usage.breakCount, usage.totalMinutes),
                       style: const TextStyle(
                         color: Colors.white,
-                        fontSize: 17,
+                        fontSize: 16.5,
                         fontWeight: FontWeight.bold,
-                        height: 1.3,
+                        height: 1.35,
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -270,7 +268,7 @@ class _ChildDashboardScreenState extends ConsumerState<ChildDashboardScreen> {
 
               const SizedBox(height: 20),
 
-              // ─── 2. REAL-WORLD OFFLINE MISSION ───
+              // 2. Real-World Offline Mission Quest Card
               Builder(
                 builder: (context) {
                   final missionsState = ref.watch(childMissionsControllerProvider);
@@ -286,12 +284,13 @@ class _ChildDashboardScreenState extends ConsumerState<ChildDashboardScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(
-                            'Real-World Mission 🚀',
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.w800,
-                                  color: AppTheme.childTextDark,
-                                ),
+                          const Text(
+                            'Today\'s Activity Quest',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.childTextDark,
+                            ),
                           ),
                           if (missionsState.missions.isNotEmpty)
                             TextButton(
@@ -303,27 +302,13 @@ class _ChildDashboardScreenState extends ConsumerState<ChildDashboardScreen> {
                       const SizedBox(height: 8),
 
                       if (activeMission != null) ...[
-                        Container(
-                          padding: const EdgeInsets.all(18),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(22),
-                            border: Border.all(
-                              color: activeMission.isPendingApproval
-                                  ? AppTheme.warningOrange
-                                  : activeMission.isStarted
-                                      ? AppTheme.childSecondary
-                                      : AppTheme.childPrimary.withAlpha((0.4 * 255).round()),
-                              width: 1.5,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withAlpha((0.03 * 255).round()),
-                                blurRadius: 10,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
+                        AppCard(
+                          borderColor: activeMission.isPendingApproval
+                              ? AppColors.warningOrange
+                              : activeMission.isStarted
+                                  ? AppColors.childSecondary
+                                  : AppColors.childPrimary,
+                          borderWidth: 1.5,
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -331,256 +316,113 @@ class _ChildDashboardScreenState extends ConsumerState<ChildDashboardScreen> {
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
                                   Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 10, vertical: 4),
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                     decoration: BoxDecoration(
-                                      color: AppTheme.childPrimary
-                                          .withAlpha((0.12 * 255).round()),
-                                      borderRadius: BorderRadius.circular(10),
+                                      color: AppColors.childPrimary.withAlpha((0.12 * 255).round()),
+                                      borderRadius: BorderRadius.circular(AppRadius.xs),
                                     ),
                                     child: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        const Icon(Icons.timer_outlined,
-                                            size: 14, color: AppTheme.childPrimary),
+                                        const Icon(Icons.timer_outlined, size: 13, color: AppColors.childPrimary),
                                         const SizedBox(width: 4),
                                         Text(
                                           '${activeMission.targetMinutes} min',
                                           style: const TextStyle(
-                                            color: AppTheme.childPrimary,
+                                            color: AppColors.childPrimary,
                                             fontSize: 11,
-                                            fontWeight: FontWeight.bold,
+                                            fontWeight: FontWeight.w800,
                                           ),
                                         ),
                                       ],
                                     ),
                                   ),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 8, vertical: 3),
-                                    decoration: BoxDecoration(
-                                      color: AppTheme.childAccent
-                                          .withAlpha((0.2 * 255).round()),
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    child: Text(
-                                      activeMission.status.label,
-                                      style: const TextStyle(
-                                        color: AppTheme.warningOrange,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 11.5,
-                                      ),
-                                    ),
-                                  ),
+                                  if (activeMission.isPendingApproval)
+                                    AppStatusBadge.warning(label: 'Pending Review')
+                                  else if (activeMission.isStarted)
+                                    const AppStatusBadge(label: 'In Progress', type: AppStatusType.info)
+                                  else
+                                    AppStatusBadge.primary(label: 'Ready to Start'),
                                 ],
                               ),
-                              const SizedBox(height: 12),
+                              const SizedBox(height: 10),
                               Text(
                                 activeMission.title,
                                 style: const TextStyle(
                                   fontSize: 17,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppTheme.childTextDark,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.childTextDark,
                                 ),
                               ),
                               const SizedBox(height: 4),
                               Text(
                                 activeMission.description,
                                 style: const TextStyle(
-                                  fontSize: 13,
-                                  color: AppTheme.neutralMuted,
-                                  height: 1.3,
+                                  fontSize: 13.5,
+                                  color: AppColors.childTextSecondary,
+                                  height: 1.35,
                                 ),
                               ),
                               if (activeMission.reward != null &&
                                   activeMission.reward!.isNotEmpty) ...[
-                                const SizedBox(height: 10),
+                                const SizedBox(height: 8),
                                 Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 10, vertical: 6),
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                   decoration: BoxDecoration(
-                                    color: AppTheme.warningOrange
-                                        .withAlpha((0.12 * 255).round()),
-                                    borderRadius: BorderRadius.circular(10),
+                                    color: AppColors.warningOrangeLight,
+                                    borderRadius: BorderRadius.circular(AppRadius.xs),
                                   ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const Icon(Icons.card_giftcard_rounded,
-                                          size: 16, color: AppTheme.warningOrange),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        'Reward: ${activeMission.reward}',
-                                        style: const TextStyle(
-                                          color: AppTheme.warningOrange,
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ],
+                                  child: Text(
+                                    '🎁 Reward: ${activeMission.reward}',
+                                    style: const TextStyle(
+                                      color: AppColors.warningOrange,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                    ),
                                   ),
                                 ),
                               ],
-                              if (activeMission.isNeedsRetry &&
-                                  activeMission.parentFeedback != null) ...[
-                                const SizedBox(height: 10),
-                                Container(
-                                  padding: const EdgeInsets.all(10),
-                                  decoration: BoxDecoration(
-                                    color: AppTheme.warningOrange
-                                        .withAlpha((0.12 * 255).round()),
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      const Icon(Icons.info_outline,
-                                          size: 16, color: AppTheme.warningOrange),
-                                      const SizedBox(width: 6),
-                                      Expanded(
-                                        child: Text(
-                                          'Parent Note: "${activeMission.parentFeedback}"',
-                                          style: const TextStyle(
-                                            fontSize: 12,
-                                            color: AppTheme.warningOrange,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                              const SizedBox(height: 16),
+                              const SizedBox(height: 14),
 
-                              // Action button for child
-                              if (activeMission.isPendingApproval) ...[
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      vertical: 10, horizontal: 14),
-                                  decoration: BoxDecoration(
-                                    color: AppTheme.warningOrange
-                                        .withAlpha((0.12 * 255).round()),
-                                    borderRadius: BorderRadius.circular(14),
-                                  ),
-                                  child: const Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(Icons.hourglass_top_rounded,
-                                          size: 16, color: AppTheme.warningOrange),
-                                      SizedBox(width: 8),
-                                      Text(
-                                        'Submitted — Waiting for parent review ⏳',
-                                        style: TextStyle(
-                                          color: AppTheme.warningOrange,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 12.5,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
+                              if (activeMission.isPendingApproval)
+                                const AppStatusBadge(
+                                  label: 'Submitted — Waiting for parent review ⏳',
+                                  type: AppStatusType.warning,
+                                )
+                              else if (activeMission.isStarted)
+                                AppButton(
+                                  label: 'Complete & Add Proof',
+                                  icon: Icons.check_circle_outline_rounded,
+                                  variant: AppButtonVariant.secondary,
+                                  isFullWidth: true,
+                                  onPressed: () {
+                                    ChildTaskSubmissionDialog.show(
+                                      context,
+                                      mission: activeMission,
+                                    );
+                                  },
+                                )
+                              else
+                                AppButton(
+                                  label: activeMission.isNeedsRetry ? 'Try Again' : 'Start Activity',
+                                  icon: Icons.play_arrow_rounded,
+                                  variant: AppButtonVariant.primary,
+                                  isFullWidth: true,
+                                  onPressed: () {
+                                    ref
+                                        .read(childMissionsControllerProvider.notifier)
+                                        .startTask(activeMission.id);
+                                  },
                                 ),
-                              ] else if (activeMission.isStarted) ...[
-                                SizedBox(
-                                  width: double.infinity,
-                                  child: ElevatedButton.icon(
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: AppTheme.childSecondary,
-                                      foregroundColor: Colors.white,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(14),
-                                      ),
-                                      padding: const EdgeInsets.symmetric(vertical: 12),
-                                    ),
-                                    onPressed: () {
-                                      ChildTaskSubmissionDialog.show(
-                                        context,
-                                        mission: activeMission,
-                                      );
-                                    },
-                                    icon: const Icon(Icons.check_circle_outline_rounded,
-                                        size: 18),
-                                    label: const Text(
-                                      'Complete Activity & Submit',
-                                      style: TextStyle(
-                                          fontSize: 14, fontWeight: FontWeight.bold),
-                                    ),
-                                  ),
-                                ),
-                              ] else ...[
-                                SizedBox(
-                                  width: double.infinity,
-                                  child: ElevatedButton.icon(
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: AppTheme.childPrimary,
-                                      foregroundColor: Colors.white,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(14),
-                                      ),
-                                      padding: const EdgeInsets.symmetric(vertical: 12),
-                                    ),
-                                    onPressed: () {
-                                      ref
-                                          .read(childMissionsControllerProvider.notifier)
-                                          .startTask(activeMission.id);
-                                    },
-                                    icon: const Icon(Icons.play_arrow_rounded, size: 20),
-                                    label: Text(
-                                      activeMission.isNeedsRetry
-                                          ? 'Try Again (${activeMission.targetMinutes}m)'
-                                          : 'Start Mission (${activeMission.targetMinutes}m)',
-                                      style: const TextStyle(
-                                          fontSize: 14, fontWeight: FontWeight.bold),
-                                    ),
-                                  ),
-                                ),
-                              ],
                             ],
                           ),
                         ),
                       ] else ...[
-                        // Authentic empty state when no parent mission assigned
-                        Container(
-                          padding: const EdgeInsets.all(20),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(22),
-                            border: Border.all(color: AppTheme.neutralBorder),
-                          ),
-                          child: Column(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: AppTheme.childPrimary
-                                      .withAlpha((0.08 * 255).round()),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(
-                                  Icons.forest_rounded,
-                                  size: 32,
-                                  color: AppTheme.childPrimary,
-                                ),
-                              ),
-                              const SizedBox(height: 10),
-                              const Text(
-                                'No missions yet',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 15,
-                                  color: AppTheme.childTextDark,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              const Text(
-                                'Your parent hasn\'t assigned a new mission. Enjoy your mindful day!',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 12.5,
-                                  color: AppTheme.neutralMuted,
-                                ),
-                              ),
-                            ],
-                          ),
+                        AppEmptyState(
+                          icon: Icons.park_outlined,
+                          title: 'No active quest right now',
+                          description: 'When your parent assigns an activity, it will appear right here!',
+                          iconColor: AppColors.childSecondary,
                         ),
                       ],
                     ],
@@ -588,404 +430,120 @@ class _ChildDashboardScreenState extends ConsumerState<ChildDashboardScreen> {
                 },
               ),
 
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
 
-              // ─── 3. CURRENT ACTIVE GOAL (MAIN ACTION) ───
-              Text(
-                'Current Goal 🎯',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      color: AppTheme.childTextDark,
-                    ),
-              ),
-              const SizedBox(height: 8),
-
+              // 3. Active Goal Progress Card
               if (activeGoal != null) ...[
-                Container(
-                  padding: const EdgeInsets.all(18),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(22),
-                    border: Border.all(
-                      color: activeGoal.isCompleted
-                          ? AppTheme.childSecondary
-                          : AppTheme.neutralBorder,
-                      width: activeGoal.isCompleted ? 1.5 : 1.0,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withAlpha((0.03 * 255).round()),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
+                AppCard(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: AppTheme.childPrimary
-                                  .withAlpha((0.12 * 255).round()),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(Icons.flag_rounded,
-                                    size: 14, color: AppTheme.childPrimary),
-                                const SizedBox(width: 4),
-                                Text(
-                                  activeGoal.isAIGenerated
-                                      ? 'Daily Habit Goal'
-                                      : 'Personal Goal',
-                                  style: const TextStyle(
-                                    color: AppTheme.childPrimary,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Text(
-                            activeGoal.isCompleted
-                                ? 'Completed! 🎉'
-                                : '${activeGoal.currentMinutes}/${activeGoal.targetMinutes} ${activeGoal.type == GoalType.breakGoal ? "breaks" : "min"}',
+                          const Text(
+                            'Active Focus Goal',
                             style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: activeGoal.isCompleted
-                                  ? AppTheme.childSecondary
-                                  : AppTheme.neutralMuted,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.childTextDark,
                             ),
                           ),
+                          AppStatusBadge.primary(label: '${activeGoal.progressPercentage}%'),
                         ],
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 8),
                       Text(
                         activeGoal.title,
                         style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.childTextDark,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        activeGoal.description,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          color: AppTheme.neutralMuted,
-                          height: 1.3,
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(10),
-                        child: LinearProgressIndicator(
-                          value: activeGoal.progressRatio,
-                          backgroundColor: AppTheme.neutralBg,
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            activeGoal.isCompleted
-                                ? AppTheme.childSecondary
-                                : AppTheme.childPrimary,
-                          ),
-                          minHeight: 10,
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          TextButton.icon(
-                            onPressed: () => context.go(AppRoutes.childGoals),
-                            icon: const Icon(Icons.arrow_forward_rounded, size: 16),
-                            label: const Text('View All Goals & Activities'),
-                          ),
-                        ],
+                      const SizedBox(height: 10),
+                      AppProgressBar(
+                        progress: activeGoal.progressRatio,
+                        label: '${activeGoal.currentMinutes}/${activeGoal.targetMinutes} mins completed',
+                        color: AppColors.childSecondary,
                       ),
                     ],
                   ),
                 ),
-              ] else ...[
-                // Meaningful empty goal card
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(22),
-                    border: Border.all(color: AppTheme.neutralBorder),
-                  ),
-                  child: Column(
-                    children: [
-                      const Icon(Icons.track_changes_rounded,
-                          size: 36, color: AppTheme.childPrimary),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'No active goal set yet',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      const Text(
-                        'Start a focus goal or tap below to let your AI coach suggest one!',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 12.5,
-                          color: AppTheme.neutralMuted,
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      ElevatedButton.icon(
-                        icon: const Icon(Icons.auto_awesome_rounded, size: 16),
-                        label: const Text('Set My First Goal'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppTheme.childPrimary,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                        ),
-                        onPressed: () => context.go(AppRoutes.childGoals),
-                      ),
-                    ],
-                  ),
-                ),
+                const SizedBox(height: 16),
               ],
 
-              const SizedBox(height: 20),
-
-              // ─── 3. FRIENDLY AI COACHING BUDDY CARD ───
-              Container(
-                padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(22),
-                  border: Border.all(
-                    color: AppTheme.childSecondary.withAlpha((0.3 * 255).round()),
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppTheme.childSecondary.withAlpha((0.06 * 255).round()),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: AppTheme.childSecondary
-                                .withAlpha((0.15 * 255).round()),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Text('🌱', style: TextStyle(fontSize: 18)),
-                        ),
-                        const SizedBox(width: 10),
-                        const Expanded(
-                          child: Text(
-                            'AI Coaching Buddy',
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.bold,
-                              color: AppTheme.childTextDark,
-                            ),
-                          ),
-                        ),
-                        if (childState.isCoachingLoopRunning)
-                          const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    if (patterns.isNotEmpty) ...[
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: AppTheme.childSurface,
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(patterns.first.emoji,
-                                style: const TextStyle(fontSize: 20)),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    patterns.first.title,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 13.5,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    patterns.first.suggestedAction,
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      color: AppTheme.neutralMuted,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ] else ...[
-                      Text(
-                        usage.totalMinutes == 0
-                            ? "We're still collecting today's activity. Keep using your phone mindfully!"
-                            : "Balanced habits observed today! Take a quick stretch break whenever you finish a task.",
-                        style: const TextStyle(
-                          fontSize: 13,
-                          color: AppTheme.neutralMuted,
-                          height: 1.3,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 20),
-
-              // ─── 4. DAILY MINDFUL CHECK-IN / REFLECTION ───
-              Container(
-                padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(22),
-                  border: Border.all(color: AppTheme.neutralBorder),
-                ),
+              // 4. Daily Mindful Reflection Card
+              AppCard(
                 child: Row(
                   children: [
                     Container(
                       padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: AppTheme.childAccent.withAlpha((0.15 * 255).round()),
+                      decoration: const BoxDecoration(
+                        color: AppColors.childPrimaryContainer,
                         shape: BoxShape.circle,
                       ),
-                      child: Text(
-                        reflection?.mood.emoji ?? '✨',
-                        style: const TextStyle(fontSize: 24),
-                      ),
+                      child: const Icon(Icons.favorite_rounded,
+                          color: AppColors.childPrimary, size: 24),
                     ),
                     const SizedBox(width: 14),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            reflection != null
-                                ? 'Today felt ${reflection.mood.label}!'
-                                : 'How did your screen time feel?',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
+                          const Text(
+                            'Daily Mindful Reflection',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 14.5,
+                              color: AppColors.childTextDark,
                             ),
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            reflection?.notes ??
-                                'Tap to record how your day felt.',
+                            reflection != null
+                                ? 'Reflection recorded for today! 🌿'
+                                : 'How was your balance and focus today?',
                             style: const TextStyle(
-                              fontSize: 12,
-                              color: AppTheme.neutralMuted,
+                              fontSize: 12.5,
+                              color: AppColors.childTextSecondary,
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
                           ),
                         ],
                       ),
                     ),
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.childSecondary,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 8),
-                      ),
+                    AppButton(
+                      label: reflection != null ? 'View' : 'Reflect',
+                      size: AppButtonSize.sm,
+                      variant: AppButtonVariant.outlined,
                       onPressed: () {
                         showDialog(
                           context: context,
                           builder: (ctx) => ChildReflectionDialog(
                             existingReflection: reflection,
-                            onSave: (data) {
+                            onSave: (result) {
                               ref
-                                  .read(
-                                      childDashboardControllerProvider.notifier)
+                                  .read(childDashboardControllerProvider.notifier)
                                   .saveReflection(
-                                    mood: data.mood,
-                                    notes: data.notes,
+                                    mood: result.mood,
+                                    notes: result.notes,
                                   );
                             },
-                            onDelete: () {
-                              ref
-                                  .read(
-                                      childDashboardControllerProvider.notifier)
-                                  .deleteTodayReflection();
-                            },
+                            onDelete: reflection != null
+                                ? () {
+                                    ref
+                                        .read(childDashboardControllerProvider.notifier)
+                                        .deleteTodayReflection();
+                                  }
+                                : null,
                           ),
                         );
                       },
-                      child: Text(reflection != null ? 'Edit' : 'Reflect'),
                     ),
                   ],
                 ),
               ),
 
-              const SizedBox(height: 20),
-
-              // ─── 5. PRIVACY & SAFETY ASSURANCE ───
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: AppTheme.childSecondary.withAlpha((0.08 * 255).round()),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.shield_outlined,
-                        color: AppTheme.childSecondary, size: 20),
-                    SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        '100% On-Device: Your usage notes and reflections stay private on this phone.',
-                        style: TextStyle(
-                          fontSize: 11.5,
-                          color: AppTheme.childSecondary,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 24),
             ],
           ),
         ),
@@ -1000,27 +558,8 @@ class _ChildDashboardScreenState extends ConsumerState<ChildDashboardScreen> {
   }) {
     return Expanded(
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, color: Colors.white70, size: 13),
-              const SizedBox(width: 3),
-              Flexible(
-                child: Text(
-                  label,
-                  style: const TextStyle(
-                    color: Colors.white70,
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
+          Icon(icon, color: Colors.white70, size: 18),
           const SizedBox(height: 4),
           Text(
             value,
@@ -1029,8 +568,15 @@ class _ChildDashboardScreenState extends ConsumerState<ChildDashboardScreen> {
               fontWeight: FontWeight.w800,
               fontSize: 15,
             ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white70,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ],
       ),

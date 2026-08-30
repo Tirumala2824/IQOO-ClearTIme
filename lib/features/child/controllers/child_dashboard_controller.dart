@@ -419,6 +419,10 @@ Future<void> refreshUsageAccess() async {
     state = state.copyWith(missions: updated);
   }
 
+  void updateMissionsLocally(List<ChildMission> missions) {
+    state = state.copyWith(missions: missions);
+  }
+
   Future<void> saveReflection({
     required ReflectionMood mood,
     String? notes,

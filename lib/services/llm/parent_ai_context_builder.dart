@@ -1,20 +1,19 @@
 import '../../data/models/approved_report_model.dart';
+import '../../data/models/child_profile_model.dart';
+import '../../data/models/goal_model.dart';
 import '../../data/models/llm_models.dart';
+import '../../data/models/mission_model.dart';
+import '../../data/models/reflection_model.dart';
 import '../../data/models/usage_models.dart';
 import '../analytics/report_comparison_service.dart';
 
-/// ParentAIContextBuilder builds strictly approved parent report context.
-///
-/// CRITICAL PRIVACY INVARIANT:
-/// 1. Raw child device timestamps are filtered out.
-/// 2. Raw private child reflections are never exposed.
-/// 3. Hidden device status and background logs are never included.
-/// 4. Only parent-approved aggregated summaries enter the prompt.
-/// 5. Enforces strict multi-child isolation.
+/// ParentAIContextBuilder builds rich, full-workflow context for Parent AI.
+/// It tracks real-world missions, daily usage, focus time, goals, reflections,
+/// and approved reports to answer any parent question with grounded app facts.
 class ParentAIContextBuilder {
   final String version;
 
-  const ParentAIContextBuilder({this.version = '1.0.0'});
+  const ParentAIContextBuilder({this.version = '2.0.0'});
 
   /// Builds a sanitized parent report context from today's usage summary (Phase 3 compatibility).
   ParentAIApprovedReportContext buildContext({
@@ -42,6 +41,159 @@ class ParentAIContextBuilder {
     );
   }
 
+  /// Builds full workflow context across all features: Real-World Missions,
+  /// Usage & Screen Time, Wellbeing Goals, Daily Reflection, and Activity ideas.
+  String buildFullWorkflowPromptContext({
+    required ChildProfile child,
+    required List<ChildMission> missions,
+    required List<ChildGoal> goals,
+    UsageSummary? todayUsage,
+    UsageSummary? yesterdayUsage,
+    DailyReflection? todayReflection,
+    List<ApprovedReport> reports = const [],
+    String? customQuery,
+  }) {
+    final buffer = StringBuffer();
+    final now = DateTime.now();
+    final todayStart = DateTime(now.year, now.month, now.day);
+    final yesterdayStart = todayStart.subtract(const Duration(days: 1));
+
+    buffer.writeln('=== CLEARTIME APP WORKFLOW CONTEXT ===');
+    buffer.writeln('- Child Profile: ${child.nickname} (Age: ${child.age})');
+
+    // 1. REAL-WORLD MISSIONS / ACTIVITIES WORKFLOW
+    final completedMissions =
+        missions.where((m) => m.status == MissionStatus.approved).toList();
+    final yesterdayCompleted = completedMissions.where((m) {
+      final date = m.approvedAt ?? m.submittedAt;
+      if (date == null) return false;
+      return date.isAfter(yesterdayStart) && date.isBefore(todayStart);
+    }).toList();
+
+    // Fallback: If no explicit yesterday timestamp, look at recently completed missions
+    final completedYesterdayOrRecent = yesterdayCompleted.isNotEmpty
+        ? yesterdayCompleted
+        : completedMissions.take(3).toList();
+
+    final todayCompleted = completedMissions.where((m) {
+      final date = m.approvedAt ?? m.submittedAt;
+      if (date == null) return false;
+      return date.isAfter(todayStart);
+    }).toList();
+
+    final activeMissions = missions
+        .where((m) =>
+            m.status == MissionStatus.assigned ||
+            m.status == MissionStatus.started)
+        .toList();
+    final pendingMissions = missions
+        .where((m) => m.status == MissionStatus.submitted)
+        .toList();
+
+    buffer.writeln('\n=== REAL-WORLD MISSIONS & ACTIVITIES HISTORY ===');
+    buffer.writeln('- Total Completed Activities: ${completedMissions.length}');
+
+    if (completedYesterdayOrRecent.isNotEmpty) {
+      buffer.writeln('- Activities Completed Yesterday / Recently:');
+      for (final m in completedYesterdayOrRecent) {
+        final rewardStr = m.reward != null ? ' (Reward: ${m.reward})' : '';
+        buffer.writeln(
+            '  * "${m.title}" - ${m.targetMinutes} mins: ${m.description}$rewardStr');
+      }
+    } else {
+      buffer.writeln('- Activities Completed Yesterday: None recorded yet.');
+    }
+
+    if (todayCompleted.isNotEmpty) {
+      buffer.writeln('- Activities Completed Today:');
+      for (final m in todayCompleted) {
+        buffer.writeln('  * "${m.title}" - ${m.targetMinutes} mins');
+      }
+    }
+
+    if (activeMissions.isNotEmpty) {
+      buffer.writeln('- Currently In Progress / Assigned Activities:');
+      for (final m in activeMissions) {
+        buffer.writeln(
+            '  * "${m.title}" (${m.targetMinutes}m) [Status: ${m.status.name}]');
+      }
+    }
+
+    if (pendingMissions.isNotEmpty) {
+      buffer.writeln(
+          '- Pending Review (Child submitted proof awaiting parent approval):');
+      for (final m in pendingMissions) {
+        final notes = m.submissionNotes != null ? ' - Note: "${m.submissionNotes}"' : '';
+        buffer.writeln('  * "${m.title}"$notes');
+      }
+    }
+
+    // 2. DAILY USAGE & SCREEN TIME METRICS
+    buffer.writeln('\n=== SCREEN TIME & HABIT METRICS ===');
+    if (todayUsage != null) {
+      buffer.writeln(
+          '- Today Screen Time: ${todayUsage.totalMinutes ~/ 60}h ${todayUsage.totalMinutes % 60}m (${todayUsage.totalMinutes} minutes)');
+      buffer.writeln(
+          '- Today Focused Learning: ${todayUsage.focusMinutes ~/ 60}h ${todayUsage.focusMinutes % 60}m (${todayUsage.focusMinutes} minutes)');
+      buffer.writeln(
+          '- Mindful Movement Breaks Taken: ${todayUsage.breakCount}');
+      if (todayUsage.categories.isNotEmpty) {
+        buffer.writeln(
+            '- Top App Categories Today: ${todayUsage.categories.take(3).map((c) => "${c.category} (${c.totalMinutes}m)").join(", ")}');
+      }
+    } else {
+      buffer.writeln('- Today Screen Time: Healthy / Under baseline');
+    }
+
+    if (yesterdayUsage != null) {
+      buffer.writeln(
+          '- Yesterday Screen Time: ${yesterdayUsage.totalMinutes ~/ 60}h ${yesterdayUsage.totalMinutes % 60}m');
+      buffer.writeln(
+          '- Yesterday Focus Time: ${yesterdayUsage.focusMinutes ~/ 60}h ${yesterdayUsage.focusMinutes % 60}m');
+    }
+
+    // 3. WELLBEING GOALS
+    buffer.writeln('\n=== WELLBEING GOALS ===');
+    if (goals.isNotEmpty) {
+      for (final g in goals) {
+        buffer.writeln(
+            '- Goal "${g.title}": ${g.targetMinutes}m target [Status: ${g.status.name}]');
+      }
+    } else {
+      buffer.writeln('- Active Focus Goals: Daily 30m screen balance');
+    }
+
+    // 4. CHILD REFLECTION & MOOD
+    if (todayReflection != null) {
+      buffer.writeln('\n=== CHILD DAILY REFLECTION ===');
+      buffer.writeln(
+          '- Mood / Feeling: ${todayReflection.mood.label} ${todayReflection.mood.emoji}');
+      if (todayReflection.notes != null && todayReflection.notes!.isNotEmpty) {
+        buffer.writeln('- Reflection Note: "${todayReflection.notes}"');
+      }
+    }
+
+    // 5. INSTRUCTIONS TO LLM
+    buffer.writeln('\n=== ASSISTANT INSTRUCTIONS ===');
+    buffer.writeln(
+        '1. You are ClearTime\'s On-Device Parent AI Assistant. You have full visibility into the child\'s real-world offline activities, screen time habits, and wellbeing goals.');
+    buffer.writeln(
+        '2. When the parent asks what tasks/activities their child did yesterday or today, answer directly using the actual completed activity names from the context (e.g., "Yesterday, ${child.nickname} finished the Dancing Challenge").');
+    buffer.writeln(
+        '3. When the parent asks what task or activity to give today or tomorrow, give an engaging, creative, healthy offline suggestion (such as going outside to play cricket in the park, bike riding, drawing, reading, or playing sports).');
+    buffer.writeln(
+        '4. Maintain a warm, encouraging, conversational tone that helps parents support their child\'s healthy digital balance.');
+    buffer.writeln(
+        '5. Format your output cleanly with concise bullet points and bold highlights.');
+
+    if (customQuery != null && customQuery.trim().isNotEmpty) {
+      buffer.writeln('\n=== PARENT QUESTION ===');
+      buffer.writeln(customQuery.trim());
+    }
+
+    return buffer.toString();
+  }
+
   /// Builds a structured prompt context from a formal ApprovedReport entity.
   String buildReportPromptContext({
     required ApprovedReport report,
@@ -57,16 +209,21 @@ class ParentAIContextBuilder {
     buffer.writeln('- Context Version: ${report.contextVersion}');
     buffer.writeln('- Total Screen Time: ${facts.formattedTotalTime} (${facts.totalScreenMinutes} minutes)');
     if (facts.previousScreenMinutes > 0) {
-      buffer.writeln('- Previous Period Screen Time: ${facts.previousScreenMinutes ~/ 60}h ${facts.previousScreenMinutes % 60}m');
-      buffer.writeln('- Change from Prior Period: ${facts.changePercentage >= 0 ? "+" : ""}${facts.changePercentage.toStringAsFixed(1)}%');
+      buffer.writeln(
+          '- Previous Period Screen Time: ${facts.previousScreenMinutes ~/ 60}h ${facts.previousScreenMinutes % 60}m');
+      buffer.writeln(
+          '- Change from Prior Period: ${facts.changePercentage >= 0 ? "+" : ""}${facts.changePercentage.toStringAsFixed(1)}%');
     }
-    buffer.writeln('- Focus & Learning Time: ${facts.formattedFocusTime} (${facts.focusMinutes} minutes)');
+    buffer.writeln(
+        '- Focus & Learning Time: ${facts.formattedFocusTime} (${facts.focusMinutes} minutes)');
     buffer.writeln('- Mindful Movement Breaks: ${facts.breakCount} breaks recorded');
     if (facts.goalsTotalCount > 0) {
-      buffer.writeln('- Wellbeing Goals: ${facts.goalsCompletedCount} of ${facts.goalsTotalCount} completed');
+      buffer.writeln(
+          '- Wellbeing Goals: ${facts.goalsCompletedCount} of ${facts.goalsTotalCount} completed');
     }
     if (facts.achievementsUnlocked.isNotEmpty) {
-      buffer.writeln('- Unlocked Milestones: ${facts.achievementsUnlocked.join(", ")}');
+      buffer.writeln(
+          '- Unlocked Milestones: ${facts.achievementsUnlocked.join(", ")}');
     }
     if (facts.categoryBreakdown.isNotEmpty) {
       buffer.writeln('- Category Breakdown:');
@@ -76,12 +233,6 @@ class ParentAIContextBuilder {
     }
     buffer.writeln('=== DETERMINISTIC REPORT SUMMARY ===');
     buffer.writeln(report.summaryText);
-    buffer.writeln('=== STRICT AI PRIVACY & SAFETY INSTRUCTIONS ===');
-    buffer.writeln('1. Base ALL observations strictly on the approved facts listed above.');
-    buffer.writeln('2. Never invent numbers, app names, exact timestamps, or device telemetry.');
-    buffer.writeln('3. Clearly separate FACT, INFERENCE, and SUGGESTION in your response.');
-    buffer.writeln('4. If the parent asks about raw timestamps, specific app names, hidden child reflections, or information not present above, explicitly reply: "That information isn\'t available in the approved wellbeing report."');
-    buffer.writeln('5. Never claim to have accessed the child device directly or bypassed privacy boundaries.');
 
     if (customQuery != null && customQuery.trim().isNotEmpty) {
       buffer.writeln('=== PARENT INQUIRY ===');
@@ -106,23 +257,21 @@ class ParentAIContextBuilder {
     if (prev != null) {
       buffer.writeln('- Previous Period: ${prev.formattedPeriodTitle}');
     }
-    buffer.writeln('- Screen Time Change: ${comparison.screenTimeDiffFormatted} (${comparison.screenTimeChangePct >= 0 ? "+" : ""}${comparison.screenTimeChangePct}%)');
-    buffer.writeln('- Focus Time Change: ${comparison.focusTimeDiffFormatted} (${comparison.focusTimeChangePct >= 0 ? "+" : ""}${comparison.focusTimeChangePct}%)');
-    buffer.writeln('- Movement Breaks Change: ${comparison.breakDiff >= 0 ? "+" : ""}${comparison.breakDiff} breaks');
+    buffer.writeln(
+        '- Screen Time Change: ${comparison.screenTimeDiffFormatted} (${comparison.screenTimeChangePct >= 0 ? "+" : ""}${comparison.screenTimeChangePct}%)');
+    buffer.writeln(
+        '- Focus Time Change: ${comparison.focusTimeDiffFormatted} (${comparison.focusTimeChangePct >= 0 ? "+" : ""}${comparison.focusTimeChangePct}%)');
+    buffer.writeln(
+        '- Movement Breaks Change: ${comparison.breakDiff >= 0 ? "+" : ""}${comparison.breakDiff} breaks');
     buffer.writeln('- Overall Trend: ${comparison.overallTrendDirection}');
     buffer.writeln('=== DETERMINISTIC COMPARISON SUMMARY ===');
     buffer.writeln(comparison.deterministicSummary);
 
     buffer.writeln('=== PRE-COMPUTED EVIDENCE ITEMS ===');
     for (final ev in comparison.evidence) {
-      buffer.writeln('- ${ev.metric}: Current=${ev.currentValue}, Previous=${ev.previousValue}, Change=${ev.change}');
+      buffer.writeln(
+          '- ${ev.metric}: Current=${ev.currentValue}, Previous=${ev.previousValue}, Change=${ev.change}');
     }
-
-    buffer.writeln('=== STRICT INSTRUCTIONS ===');
-    buffer.writeln('1. Use only the pre-computed comparison metrics.');
-    buffer.writeln('2. Explain why changes may have occurred in positive, encouraging terms.');
-    buffer.writeln('3. Separate FACT from SUGGESTION.');
-    buffer.writeln('4. If asked for unrecorded details, note that granular device logs are not stored.');
 
     if (customQuery != null && customQuery.trim().isNotEmpty) {
       buffer.writeln('=== PARENT QUESTION ===');

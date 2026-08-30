@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../core/theme/app_theme.dart';
+import 'package:go_router/go_router.dart';
+import '../../../core/constants/app_routes.dart';
+import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_radius.dart';
+import '../../../data/models/llm_models.dart';
 import '../../../services/llm/local_ai_coach_service.dart';
 import '../controllers/child_ai_coach_controller.dart';
 
@@ -46,91 +50,120 @@ class _ChildAiScreenState extends ConsumerState<ChildAiScreen> {
     });
 
     return Scaffold(
-      backgroundColor: AppTheme.childSurface,
+      backgroundColor: AppColors.childSurface,
       appBar: AppBar(
-        backgroundColor: AppTheme.childSurface,
-        title: const Text('My Wellbeing Buddy 🤖'),
+        backgroundColor: AppColors.childSurface,
+        title: const Row(
+          children: [
+            Icon(Icons.smart_toy_rounded, color: AppColors.childPrimary, size: 24),
+            SizedBox(width: 8),
+            Text(
+              'My AI Agent 🤖',
+              style: TextStyle(fontWeight: FontWeight.w800),
+            ),
+          ],
+        ),
         actions: [
-          Container(
-            margin: const EdgeInsets.only(right: 16),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: AppTheme.successGreen.withAlpha((0.15 * 255).round()),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.shield_rounded,
-                    color: AppTheme.successGreen, size: 14),
-                SizedBox(width: 4),
-                Text(
-                  '100% Offline AI',
-                  style: TextStyle(
-                    color: AppTheme.successGreen,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 11,
-                  ),
-                ),
-              ],
-            ),
+          IconButton(
+            icon: const Icon(Icons.add_comment_outlined, color: AppColors.childPrimary),
+            tooltip: 'New Conversation',
+            onPressed: () {
+              ref.read(childAiCoachControllerProvider.notifier).startNewConversation();
+            },
           ),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert_rounded, color: AppColors.childTextDark),
+            tooltip: 'Options',
+            onSelected: (value) {
+              if (value == 'clear') {
+                ref.read(childAiCoachControllerProvider.notifier).clearConversationHistory();
+              } else if (value == 'diagnostics') {
+                context.push(AppRoutes.aiDiagnostics);
+              }
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem(
+                value: 'clear',
+                child: Row(
+                  children: [
+                    Icon(Icons.delete_outline_rounded, size: 18, color: AppColors.alertRed),
+                    SizedBox(width: 8),
+                    Text('Clear Conversation', style: TextStyle(color: AppColors.alertRed)),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'diagnostics',
+                child: Row(
+                  children: [
+                    Icon(Icons.memory_rounded, size: 18, color: AppColors.childPrimary),
+                    SizedBox(width: 8),
+                    Text('AI Model Status'),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(width: 8),
         ],
       ),
       body: Column(
         children: [
-          // Truthful availability banner
-          if (aiState.modelInfo != null &&
-              !(aiState.modelInfo!.isInstalled && aiState.modelInfo!.isLoaded))
-            Container(
-              width: double.infinity,
-              margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: AppTheme.warningOrange.withAlpha((0.15 * 255).round()),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.info_outline_rounded,
-                      color: AppTheme.warningOrange, size: 18),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      aiState.modelInfo!.isInstalled
-                          ? 'AI is still loading. Replies appear once the model is ready.'
-                          : 'AI setup needed. This buddy only works after a local model is downloaded on this device.',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppTheme.neutralMuted,
-                      ),
+          // On-device Badge
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            color: AppColors.childSecondary.withAlpha((0.1 * 255).round()),
+            child: Row(
+              children: [
+                const Icon(Icons.shield_rounded, size: 14, color: AppColors.childSecondary),
+                const SizedBox(width: 6),
+                const Expanded(
+                  child: Text(
+                    '100% On-Device AI Agent • Autonomous Habits & Mission Creator',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.childSecondary,
                     ),
                   ),
-                ],
-              ),
+                ),
+                if (aiState.modelInfo != null)
+                  Text(
+                    aiState.modelInfo!.modelName.split('/').last,
+                    style: const TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.neutralMuted,
+                    ),
+                  ),
+              ],
             ),
+          ),
+
+          // Error banner
           if (aiState.errorMessage != null)
             Container(
               width: double.infinity,
               margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: AppTheme.alertRed.withAlpha((0.12 * 255).round()),
-                borderRadius: BorderRadius.circular(12),
+                color: AppColors.errorRedLight,
+                borderRadius: BorderRadius.circular(AppRadius.sm),
               ),
               child: Text(
-                'AI is unavailable right now: ${aiState.errorMessage}',
+                'AI Notice: ${aiState.errorMessage}',
                 style: const TextStyle(
                   fontSize: 12,
-                  color: AppTheme.alertRed,
+                  color: AppColors.alertRed,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),
 
-          // Suggested prompts horizontally scrollable
+          // Suggested Action Chips
           Container(
-            height: 48,
-            padding: const EdgeInsets.symmetric(vertical: 6),
+            height: 52,
+            padding: const EdgeInsets.symmetric(vertical: 8),
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -139,9 +172,18 @@ class _ChildAiScreenState extends ConsumerState<ChildAiScreen> {
               itemBuilder: (context, index) {
                 final prompt = LocalAICoachService.suggestedPrompts[index];
                 return ActionChip(
-                  label: Text(prompt, style: const TextStyle(fontSize: 12)),
+                  label: Text(
+                    prompt,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.childTextDark,
+                    ),
+                  ),
                   backgroundColor: Colors.white,
-                  side: const BorderSide(color: AppTheme.neutralBorder),
+                  side: BorderSide(
+                    color: AppColors.childPrimary.withAlpha((0.3 * 255).round()),
+                  ),
                   onPressed: () {
                     ref
                         .read(childAiCoachControllerProvider.notifier)
@@ -157,15 +199,14 @@ class _ChildAiScreenState extends ConsumerState<ChildAiScreen> {
             child: ListView.builder(
               controller: _scrollController,
               padding: const EdgeInsets.all(16),
-              itemCount:
-                  aiState.messages.length + (aiState.isThinking ? 1 : 0),
+              itemCount: aiState.messages.length + (aiState.isThinking ? 1 : 0),
               itemBuilder: (context, index) {
                 if (index == aiState.messages.length && aiState.isThinking) {
                   return _buildThinkingBubble();
                 }
 
                 final msg = aiState.messages[index];
-                return _buildMessageBubble(msg.text, msg.isUser);
+                return _buildMessageBubble(msg);
               },
             ),
           ),
@@ -175,7 +216,7 @@ class _ChildAiScreenState extends ConsumerState<ChildAiScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: const BoxDecoration(
               color: Colors.white,
-              border: Border(top: BorderSide(color: AppTheme.neutralBorder)),
+              border: Border(top: BorderSide(color: AppColors.neutralBorder)),
             ),
             child: SafeArea(
               child: Row(
@@ -184,9 +225,9 @@ class _ChildAiScreenState extends ConsumerState<ChildAiScreen> {
                     child: TextField(
                       controller: _textController,
                       decoration: InputDecoration(
-                        hintText: 'Ask your on-device buddy...',
+                        hintText: 'Ask your AI Agent or request a mission...',
                         filled: true,
-                        fillColor: AppTheme.neutralBg,
+                        fillColor: AppColors.neutralBg,
                         contentPadding: const EdgeInsets.symmetric(
                             horizontal: 16, vertical: 10),
                         border: OutlineInputBorder(
@@ -207,7 +248,7 @@ class _ChildAiScreenState extends ConsumerState<ChildAiScreen> {
                   const SizedBox(width: 8),
                   IconButton.filled(
                     style: IconButton.styleFrom(
-                      backgroundColor: AppTheme.childSecondary,
+                      backgroundColor: AppColors.childPrimary,
                     ),
                     icon: const Icon(Icons.send_rounded, color: Colors.white),
                     onPressed: () {
@@ -229,40 +270,185 @@ class _ChildAiScreenState extends ConsumerState<ChildAiScreen> {
     );
   }
 
-  Widget _buildMessageBubble(String text, bool isUser) {
+  Widget _buildMessageBubble(ChatMessage msg) {
+    final isUser = msg.isUser;
+    final action = msg.agentAction;
+
     return Align(
       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 6),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.78,
+          maxWidth: MediaQuery.of(context).size.width * 0.85,
         ),
         decoration: BoxDecoration(
-          color: isUser ? AppTheme.childPrimary : Colors.white,
+          color: isUser ? AppColors.childPrimary : Colors.white,
           borderRadius: BorderRadius.circular(18).copyWith(
             bottomRight: isUser ? const Radius.circular(0) : null,
             bottomLeft: !isUser ? const Radius.circular(0) : null,
           ),
-          border: isUser ? null : Border.all(color: AppTheme.neutralBorder),
+          border: isUser ? null : Border.all(color: AppColors.neutralBorder),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withAlpha((0.03 * 255).round()),
+              color: Colors.black.withAlpha((0.04 * 255).round()),
               blurRadius: 4,
               offset: const Offset(0, 2),
             ),
           ],
         ),
-        child: Text(
-          text,
-          style: TextStyle(
-            color: isUser ? Colors.white : AppTheme.childTextDark,
-            fontSize: 14,
-            height: 1.4,
-          ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              msg.text,
+              style: TextStyle(
+                color: isUser ? Colors.white : AppColors.childTextDark,
+                fontSize: 14,
+                height: 1.4,
+              ),
+            ),
+            if (action != null) ...[
+              const SizedBox(height: 10),
+              _buildAgentActionCard(action),
+            ],
+          ],
         ),
       ),
     );
+  }
+
+  Widget _buildAgentActionCard(ChildAgentAction action) {
+    if (action.type == ChildAgentActionType.missionCreated ||
+        action.type == ChildAgentActionType.focusChallengeCreated) {
+      return Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.childSurface,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          border: Border.all(
+            color: AppColors.childSecondary.withAlpha((0.4 * 255).round()),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.auto_awesome_rounded,
+                    color: AppColors.childSecondary, size: 18),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    action.title,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 13.5,
+                      color: AppColors.childTextDark,
+                    ),
+                  ),
+                ),
+                if (action.targetMinutes != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppColors.childSecondary
+                          .withAlpha((0.15 * 255).round()),
+                      borderRadius: BorderRadius.circular(AppRadius.xs),
+                    ),
+                    child: Text(
+                      '${action.targetMinutes}m',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.childSecondary,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            if (action.description.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                action.description,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppColors.childTextDark,
+                ),
+              ),
+            ],
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.childSecondary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
+                  ),
+                ),
+                icon: const Icon(Icons.play_arrow_rounded, size: 16),
+                label: const Text(
+                  'View in My Activities',
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+                ),
+                onPressed: () => context.go(AppRoutes.childMissions),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (action.type == ChildAgentActionType.taskBreakdown) {
+      return Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.childSurface,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          border: Border.all(
+            color: AppColors.childPrimary.withAlpha((0.3 * 255).round()),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.checklist_rounded,
+                    color: AppColors.childPrimary, size: 18),
+                const SizedBox(width: 6),
+                Text(
+                  action.title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 13,
+                    color: AppColors.childPrimary,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            ...action.steps.map((step) => Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Text(
+                    step,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.childTextDark,
+                      height: 1.3,
+                    ),
+                  ),
+                )),
+          ],
+        ),
+      );
+    }
+
+    return const SizedBox.shrink();
   }
 
   Widget _buildThinkingBubble() {
@@ -276,7 +462,7 @@ class _ChildAiScreenState extends ConsumerState<ChildAiScreen> {
           borderRadius: BorderRadius.circular(18).copyWith(
             bottomLeft: const Radius.circular(0),
           ),
-          border: Border.all(color: AppTheme.neutralBorder),
+          border: Border.all(color: AppColors.neutralBorder),
         ),
         child: const Row(
           mainAxisSize: MainAxisSize.min,
@@ -284,12 +470,19 @@ class _ChildAiScreenState extends ConsumerState<ChildAiScreen> {
             SizedBox(
               width: 14,
               height: 14,
-              child: CircularProgressIndicator(strokeWidth: 2),
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: AppColors.childPrimary,
+              ),
             ),
             SizedBox(width: 8),
             Text(
-              'Buddy is thinking locally...',
-              style: TextStyle(fontSize: 12, color: AppTheme.neutralMuted),
+              'AI Agent is reasoning locally on device...',
+              style: TextStyle(
+                fontSize: 12,
+                color: AppColors.neutralMuted,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ],
         ),

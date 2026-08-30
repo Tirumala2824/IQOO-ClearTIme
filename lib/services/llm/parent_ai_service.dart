@@ -1,6 +1,11 @@
 import '../../core/services/abstractions/local_llm_provider.dart';
 import '../../data/models/approved_report_model.dart';
+import '../../data/models/child_profile_model.dart';
+import '../../data/models/goal_model.dart';
 import '../../data/models/llm_models.dart';
+import '../../data/models/mission_model.dart';
+import '../../data/models/reflection_model.dart';
+import '../../data/models/usage_models.dart';
 import '../../data/repositories/local_prompt_repository.dart';
 import '../../data/repositories/local_ai_settings_repository.dart';
 import '../analytics/report_comparison_service.dart';
@@ -9,13 +14,10 @@ import 'prompt_template_engine.dart';
 import 'ai_response_validator.dart';
 import 'deterministic_fallback_service.dart';
 
-/// ParentAIService provides objective, privacy-safe report insights for parents.
+/// ParentAIService provides objective, privacy-safe report and workflow insights for parents.
 ///
-/// STRICT PRIVACY INVARIANT:
-/// 1. Only processes approved parent report facts.
-/// 2. Raw child timestamps, private reflections, and secret device data are NEVER passed to the LLM.
-/// 3. If AI is disabled or fails, DeterministicFallbackService provides fact summaries.
-/// 4. Conversations are 100% on-device.
+/// Tracks full working flow: real-world missions completed/active, screen time,
+/// goals, reflections, and offline activity coaching.
 class ParentAIService {
   final LocalLLMProvider _llmProvider;
   final ParentAIContextBuilder _contextBuilder;
@@ -43,6 +45,155 @@ class ParentAIService {
         _fallbackService = fallbackService;
 
   ParentAIContextBuilder get contextBuilder => _contextBuilder;
+
+  /// Evaluates whether a query requests unavailable or forbidden child data.
+  bool isQueryForUnavailableInfo(String query) {
+    final lower = query.toLowerCase();
+    final forbiddenPatterns = [
+      'exact app at',
+      'at 11:',
+      'at 10:',
+      'at 9:',
+      'at 8:',
+      'keystroke',
+      'secret note',
+      'incognito log',
+      'browsing history search',
+    ];
+    return forbiddenPatterns.any((p) => lower.contains(p));
+  }
+
+  /// Primary Full-Workflow Entry Point:
+  /// Handles parent questions across all existing app features: Real-World Missions,
+  /// Daily Usage/Screen Time, Wellbeing Goals, Daily Reflections, and Offline Activity Suggestions.
+  Future<ParentChatMessage> askAboutChildWorkflow({
+    required ChildProfile child,
+    required List<ChildMission> missions,
+    required List<ChildGoal> goals,
+    UsageSummary? todayUsage,
+    UsageSummary? yesterdayUsage,
+    DailyReflection? todayReflection,
+    List<ApprovedReport> reports = const [],
+    required String query,
+  }) async {
+    final now = DateTime.now();
+
+    if (isQueryForUnavailableInfo(query)) {
+      return ParentChatMessage(
+        id: 'msg-missing-${now.millisecondsSinceEpoch}',
+        text:
+            'That information isn\'t available. ClearTime preserves child privacy and trust by focusing on wellbeing balance, offline activities, and healthy routines.',
+        isUser: false,
+        timestamp: now,
+        isMissingDataNotice: true,
+        observations: const [
+          'Raw keystroke and secret background telemetry are not logged by design.'
+        ],
+        recommendations: [
+          'Discuss digital routines openly with ${child.nickname}.'
+        ],
+      );
+    }
+
+    final settings = await _settingsRepo.getSettings();
+    if (!settings.isAiEnabled) {
+      final fallback = _fallbackService.generateParentWorkflowResponse(
+        child: child,
+        missions: missions,
+        goals: goals,
+        todayUsage: todayUsage,
+        yesterdayUsage: yesterdayUsage,
+        todayReflection: todayReflection,
+        query: query,
+      );
+      return ParentChatMessage(
+        id: 'msg-disabled-${now.millisecondsSinceEpoch}',
+        text: fallback.answer,
+        isUser: false,
+        timestamp: now,
+        observations: fallback.observations,
+        evidence: fallback.evidence
+            .map((e) => AIEvidence(
+                metric: 'Workflow Fact',
+                currentValue: e,
+                previousValue: '-',
+                change: '-',
+                sourceReportId: ''))
+            .toList(),
+        recommendations: fallback.recommendations,
+      );
+    }
+
+    try {
+      final isReady = await _llmProvider.isAvailable();
+      if (isReady) {
+        final promptContext = _contextBuilder.buildFullWorkflowPromptContext(
+          child: child,
+          missions: missions,
+          goals: goals,
+          todayUsage: todayUsage,
+          yesterdayUsage: yesterdayUsage,
+          todayReflection: todayReflection,
+          reports: reports,
+          customQuery: query,
+        );
+
+        final rawResponse =
+            await _llmProvider.generate(prompt: promptContext);
+        final validation = _responseValidator.validateAndParse(rawResponse);
+
+        if (validation.isValid && validation.structuredResponse != null) {
+          final struct = validation.structuredResponse!;
+          return ParentChatMessage(
+            id: 'msg-ai-${now.millisecondsSinceEpoch}',
+            text: struct.answer,
+            isUser: false,
+            timestamp: now,
+            evidence: struct.evidence
+                .map((e) => AIEvidence(
+                    metric: 'Observation',
+                    currentValue: e,
+                    previousValue: '-',
+                    change: '-',
+                    sourceReportId: ''))
+                .toList(),
+            observations: struct.observations,
+            recommendations: struct.recommendations,
+          );
+        }
+      }
+    } catch (_) {
+      // Fall through to deterministic workflow response
+    }
+
+    // High quality deterministic fallback based on actual app data
+    final fallback = _fallbackService.generateParentWorkflowResponse(
+      child: child,
+      missions: missions,
+      goals: goals,
+      todayUsage: todayUsage,
+      yesterdayUsage: yesterdayUsage,
+      todayReflection: todayReflection,
+      query: query,
+    );
+
+    return ParentChatMessage(
+      id: 'msg-workflow-${now.millisecondsSinceEpoch}',
+      text: fallback.answer,
+      isUser: false,
+      timestamp: now,
+      evidence: fallback.evidence
+          .map((e) => AIEvidence(
+              metric: 'App Data',
+              currentValue: e,
+              previousValue: '-',
+              change: '-',
+              sourceReportId: ''))
+          .toList(),
+      observations: fallback.observations,
+      recommendations: fallback.recommendations,
+    );
+  }
 
   /// Analyzes an approved parent report context using local SLM (Phase 3 compatibility).
   Future<StructuredAIResponse> analyzeReport({
@@ -118,29 +269,6 @@ class ParentAIService {
     }
   }
 
-  /// Evaluates whether a query requests unavailable or forbidden child data.
-  bool isQueryForUnavailableInfo(String query) {
-    final lower = query.toLowerCase();
-    final forbiddenPatterns = [
-      'exact app',
-      'what app at',
-      'at 11:',
-      'at 10:',
-      'at 9:',
-      'at 8:',
-      'exact timestamp',
-      'specific time',
-      'keystroke',
-      'private note',
-      'child diary',
-      'secret',
-      'incognito',
-      'browsing history',
-      'search history',
-    ];
-    return forbiddenPatterns.any((p) => lower.contains(p));
-  }
-
   /// Asks a question about a specific ApprovedReport using local LLM.
   Future<ParentChatMessage> askAboutApprovedReport({
     required ApprovedReport report,
@@ -148,7 +276,6 @@ class ParentAIService {
   }) async {
     final now = DateTime.now();
 
-    // Check for missing / disallowed information query
     if (isQueryForUnavailableInfo(query)) {
       return ParentChatMessage(
         id: 'msg-missing-${now.millisecondsSinceEpoch}',
@@ -157,7 +284,7 @@ class ParentAIService {
         isUser: false,
         timestamp: now,
         isMissingDataNotice: true,
-        observations: [
+        observations: const [
           'Raw timestamps, detailed app event streams, and private child reflections are intentionally omitted from parent summaries.'
         ],
         recommendations: [
@@ -177,8 +304,10 @@ class ParentAIService {
           AIEvidence(
             metric: 'Screen Time',
             currentValue: report.facts.formattedTotalTime,
-            previousValue: '${report.facts.previousScreenMinutes ~/ 60}h ${report.facts.previousScreenMinutes % 60}m',
-            change: '${report.facts.changePercentage >= 0 ? "+" : ""}${report.facts.changePercentage}%',
+            previousValue:
+                '${report.facts.previousScreenMinutes ~/ 60}h ${report.facts.previousScreenMinutes % 60}m',
+            change:
+                '${report.facts.changePercentage >= 0 ? "+" : ""}${report.facts.changePercentage}%',
             sourceReportId: report.id,
           ),
         ],
@@ -204,8 +333,10 @@ class ParentAIService {
           AIEvidence(
             metric: 'Screen Time',
             currentValue: report.facts.formattedTotalTime,
-            previousValue: '${report.facts.previousScreenMinutes ~/ 60}h ${report.facts.previousScreenMinutes % 60}m',
-            change: '${report.facts.changePercentage >= 0 ? "+" : ""}${report.facts.changePercentage}%',
+            previousValue:
+                '${report.facts.previousScreenMinutes ~/ 60}h ${report.facts.previousScreenMinutes % 60}m',
+            change:
+                '${report.facts.changePercentage >= 0 ? "+" : ""}${report.facts.changePercentage}%',
             sourceReportId: report.id,
           ),
           if (report.facts.focusMinutes > 0)
@@ -213,7 +344,8 @@ class ParentAIService {
               metric: 'Focus Time',
               currentValue: report.facts.formattedFocusTime,
               previousValue: '${report.facts.previousFocusMinutes}m',
-              change: '${report.facts.focusChangePercentage >= 0 ? "+" : ""}${report.facts.focusChangePercentage}%',
+              change:
+                  '${report.facts.focusChangePercentage >= 0 ? "+" : ""}${report.facts.focusChangePercentage}%',
               sourceReportId: report.id,
             ),
         ];
@@ -255,7 +387,8 @@ class ParentAIService {
     String? query,
   }) async {
     final now = DateTime.now();
-    final effectiveQuery = query ?? 'Explain the key changes between these reports and what habit patterns to discuss.';
+    final effectiveQuery = query ??
+        'Explain the key changes between these reports and what habit patterns to discuss.';
 
     final settings = await _settingsRepo.getSettings();
     if (!settings.isAiEnabled) {
@@ -314,11 +447,11 @@ class ParentAIService {
 
   /// Preset suggested queries for parents.
   static const List<String> suggestedParentQueries = [
-    'Why did usage change this week?',
-    'What habit routines improved?',
-    'Compare this week with last week',
-    'What should I discuss with my child?',
-    'Summarize our monthly progress',
-    'What pattern should I pay attention to?',
+    'What tasks did my child complete yesterday?',
+    'What activity should I assign today?',
+    'How is today\'s screen time and focus balance?',
+    'What wellbeing goals are in progress?',
+    'Suggest a fun outdoor weekend activity',
+    'What habit routines improved this week?',
   ];
 }

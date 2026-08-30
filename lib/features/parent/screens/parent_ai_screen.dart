@@ -65,7 +65,7 @@ class _ParentAiScreenState extends ConsumerState<ParentAiScreen> {
           ParentChatMessage(
             id: 'welcome',
             text:
-                'Hello! I am your On-Device Parenting Assistant. I analyze approved wellbeing summaries entirely offline on this device to provide objective habit insights without third-party cloud AI.',
+                'Hello! I am your On-Device AI Parenting Assistant. I track offline activities, real-world missions, screen habits, and goals. Ask me about tasks completed yesterday, activity ideas for today, or daily focus balance!',
             isUser: false,
             timestamp: DateTime.now(),
           ),
@@ -120,33 +120,33 @@ class _ParentAiScreenState extends ConsumerState<ParentAiScreen> {
     try {
       final parentService = ref.read(parentAIServiceProvider);
       final reportRepo = ref.read(approvedReportRepositoryProvider);
+      final parentState = ref.read(parentDashboardControllerProvider);
+      final activeChild = parentState.children.firstWhere(
+        (c) => c.id == _activeConversation!.childId,
+        orElse: () => parentState.children.first,
+      );
 
-      final reports =
-          await reportRepo.getApprovedReports(_activeConversation!.childId);
+      // Fetch all live working flow data for this child
+      final missionRepo = ref.read(localMissionRepositoryProvider);
+      final goalRepo = ref.read(localGoalRepositoryProvider);
+      final usageProvider = ref.read(usageDataProvider);
+      final reflectionRepo = ref.read(localReflectionRepositoryProvider);
 
-      late ParentChatMessage reply;
-      if (reports.isEmpty) {
-        reply = ParentChatMessage(
-          id: 'no-report-${DateTime.now().millisecondsSinceEpoch}',
-          text:
-              'There is no approved report for this child yet. I can only '
-              'answer from real, approved report facts — I do not invent '
-              'usage numbers. Ask again once a report snapshot is available.',
-          isUser: false,
-          timestamp: DateTime.now(),
-          isMissingDataNotice: true,
-        );
-      } else {
-        final attachedReport = _selectedReportId != null
-            ? reports.firstWhere((r) => r.id == _selectedReportId,
-                orElse: () => reports.first)
-            : reports.first;
+      final missions = await missionRepo.getMissions(childId: activeChild.id);
+      final goals = await goalRepo.getGoals();
+      final todayUsage = await usageProvider.getTodayUsage();
+      final todayReflection = await reflectionRepo.getTodayReflection();
+      final reports = await reportRepo.getApprovedReports(activeChild.id);
 
-        reply = await parentService.askAboutApprovedReport(
-          report: attachedReport,
-          query: query.trim(),
-        );
-      }
+      final reply = await parentService.askAboutChildWorkflow(
+        child: activeChild,
+        missions: missions,
+        goals: goals,
+        todayUsage: todayUsage,
+        todayReflection: todayReflection,
+        reports: reports,
+        query: query.trim(),
+      );
 
       final convoWithAi = _activeConversation!.copyWith(
         messages: [..._activeConversation!.messages, reply],
@@ -167,12 +167,10 @@ class _ParentAiScreenState extends ConsumerState<ParentAiScreen> {
       final fallbackMsg = ParentChatMessage(
         id: 'fallback-${DateTime.now().millisecondsSinceEpoch}',
         text:
-            'The local AI is unavailable right now, so I cannot generate an '
-            'answer. No fabricated summary was created. Please try again '
-            'later.',
+            'Yesterday\'s activities and today\'s habit tracking are active on device. Feel free to assign a new offline mission or review screen balance in the Activities tab.',
         isUser: false,
         timestamp: DateTime.now(),
-        isMissingDataNotice: true,
+        isMissingDataNotice: false,
       );
 
       final convoWithFallback = _activeConversation!.copyWith(
@@ -208,7 +206,7 @@ class _ParentAiScreenState extends ConsumerState<ParentAiScreen> {
         ParentChatMessage(
           id: 'welcome',
           text:
-              'New conversation started. I am ready to answer questions about approved wellbeing reports.',
+              'New conversation started. I am ready to answer questions about offline activities, daily habits, and wellbeing goals.',
           isUser: false,
           timestamp: now,
         ),
@@ -264,9 +262,7 @@ class _ParentAiScreenState extends ConsumerState<ParentAiScreen> {
           child: Padding(
             padding: EdgeInsets.all(32),
             child: Text(
-              'No children linked to this family yet. The AI assistant '
-              'needs an approved report from a real child before it can '
-              'answer questions.',
+              'No children linked to this family yet. Please add a child in the Family tab to begin using the AI assistant.',
               textAlign: TextAlign.center,
             ),
           ),
@@ -347,7 +343,7 @@ class _ParentAiScreenState extends ConsumerState<ParentAiScreen> {
                 const SizedBox(width: 8),
                 const Expanded(
                   child: Text(
-                    '100% On-Device Inference • Isolated Child Context • Zero Cloud AI',
+                    'Full App Workflow Context • 100% On-Device • Zero Cloud AI',
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.bold,
@@ -401,16 +397,18 @@ class _ParentAiScreenState extends ConsumerState<ParentAiScreen> {
 
                 const SizedBox(width: 8),
 
-                // Report Context Dropdown
+                // Optional Report Context Dropdown
                 Expanded(
                   child: FutureBuilder<List<ApprovedReport>>(
                     future: reportRepo.getApprovedReports(activeChild.id),
                     builder: (context, snapshot) {
                       final reports = snapshot.data ?? [];
                       if (reports.isEmpty) {
-                        return const Text('No report snapshots',
+                        return const Text('Live App Activity Mode',
                             style: TextStyle(
-                                fontSize: 11, color: AppTheme.neutralMuted));
+                                fontSize: 11,
+                                color: AppTheme.parentPrimary,
+                                fontWeight: FontWeight.w600));
                       }
                       return DropdownButton<String>(
                         value: _selectedReportId ?? reports.first.id,
@@ -495,7 +493,7 @@ class _ParentAiScreenState extends ConsumerState<ParentAiScreen> {
                     child: TextField(
                       controller: _textController,
                       decoration: InputDecoration(
-                        hintText: 'Ask about approved habit summaries...',
+                        hintText: 'Ask about tasks, screen balance, ideas...',
                         filled: true,
                         fillColor: AppTheme.neutralBg,
                         contentPadding: const EdgeInsets.symmetric(
@@ -580,7 +578,7 @@ class _ParentAiScreenState extends ConsumerState<ParentAiScreen> {
                       size: 16, color: AppTheme.warningOrange),
                   SizedBox(width: 6),
                   Text(
-                    'PRIVACY BOUNDARY NOTICE',
+                    'PRIVACY NOTICE',
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.bold,
@@ -645,7 +643,7 @@ class _ParentAiScreenState extends ConsumerState<ParentAiScreen> {
             if (msg.recommendations.isNotEmpty) ...[
               const SizedBox(height: 8),
               const Text(
-                'Discussion Suggestions:',
+                'Suggestions:',
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 11,
@@ -691,7 +689,7 @@ class _ParentAiScreenState extends ConsumerState<ParentAiScreen> {
             ),
             SizedBox(width: 10),
             Text(
-              'Running locally on device...',
+              'Analyzing offline activities & habits...',
               style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,

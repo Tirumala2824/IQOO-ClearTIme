@@ -37,24 +37,46 @@ class ProofStorageService {
     final file = File(filePath);
     final fileName = file.uri.pathSegments.last;
     final objectPath = '$missionId/$fileName';
-    await client.storage.from(bucketName).upload(objectPath, file);
+    await client.storage.from(bucketName).upload(
+      objectPath,
+      file,
+      fileOptions: const FileOptions(upsert: true),
+    );
     return objectPath;
   }
 
-  /// Resolves a displayable (signed) URL for a stored proof object.
+  /// Resolves a displayable (signed or public) URL for a stored proof object.
   Future<String?> downloadProofUrl(String objectPath) async {
+    if (objectPath.isEmpty) return null;
+    if (objectPath.startsWith('http://') || objectPath.startsWith('https://')) {
+      return objectPath;
+    }
     final client = _safeClient;
-    if (client == null || client.auth.currentUser == null) return null;
-    final url =
-        await client.storage.from(bucketName).createSignedUrl(objectPath, 3600);
-    return url;
+    if (client == null) return null;
+    try {
+      final url = await client.storage
+          .from(bucketName)
+          .createSignedUrl(objectPath, 86400); // 24-hour expiry
+      return url;
+    } catch (_) {
+      try {
+        final url = client.storage.from(bucketName).getPublicUrl(objectPath);
+        return url;
+      } catch (_) {
+        return null;
+      }
+    }
   }
 
   /// Removes a previously uploaded proof object (e.g. replaced submission).
   Future<bool> deleteProof(String objectPath) async {
     final client = _safeClient;
     if (client == null || client.auth.currentUser == null) return false;
-    await client.storage.from(bucketName).remove([objectPath]);
-    return true;
+    try {
+      await client.storage.from(bucketName).remove([objectPath]);
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 }

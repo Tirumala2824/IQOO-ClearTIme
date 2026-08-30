@@ -27,6 +27,7 @@ import 'package:cleartime/features/child/screens/child_goals_screen.dart';
 import 'package:cleartime/features/child/screens/child_progress_screen.dart';
 import 'package:cleartime/features/child/screens/child_ai_screen.dart';
 import 'package:cleartime/features/onboarding/screens/onboarding_screen.dart';
+import 'package:cleartime/features/family/widgets/family_selector_dropdown.dart';
 import 'package:cleartime/features/parent/screens/local_ai_settings_screen.dart';
 import 'package:cleartime/features/parent/screens/model_manager_screen.dart';
 import 'package:cleartime/features/parent/screens/prompt_manager_screen.dart';
@@ -201,6 +202,20 @@ class FakeFamilyRepository implements FamilyRepository {
     final fam = await getFamilyForUser(userId);
     return fam != null ? [fam] : [];
   }
+
+  @override
+  Future<Family> updateFamily(String familyId, {required String name}) async {
+    return Family(
+      id: familyId,
+      name: name,
+      adminUserId: 'parent-1',
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+    );
+  }
+
+  @override
+  Future<void> deleteFamily(String familyId) async {}
 
   @override
   Future<ChildProfile> redeemInvitation({
@@ -415,6 +430,7 @@ void main() {
         localLlmProvider.overrideWithValue(FakeLocalLLMProvider()),
         activeLlmProvider.overrideWith((ref) => FakeLocalLLMProvider()),
         usageDataProvider.overrideWithValue(FakeUsageProvider()),
+        familyRepositoryProvider.overrideWithValue(FakeFamilyRepository()),
       ];
 
   group('ClearTime UI Widget Tests', () {
@@ -504,7 +520,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
       await tester.pump();
 
-      expect(find.textContaining('Leo'), findsOneWidget);
+      expect(find.textContaining('Hey,'), findsOneWidget);
       expect(find.text("TODAY'S WELLBEING"), findsOneWidget);
       expect(find.text('Screen Time'), findsOneWidget);
       expect(find.text('Focus Time'), findsOneWidget);
@@ -521,10 +537,12 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump();
 
-      expect(find.text('My Activities'), findsOneWidget);
-      expect(find.text('No activities yet'), findsOneWidget);
+      expect(find.text('My Real-World Activities'), findsOneWidget);
+      expect(find.text('No Activities Yet'), findsOneWidget);
     });
 
     testWidgets('ChildGoalsScreen renders goals and activities section',
@@ -537,7 +555,9 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump();
 
       expect(find.text('Goals & Activities 🎯'), findsOneWidget);
       expect(find.text('Active Focus Goals'), findsOneWidget);
@@ -554,7 +574,9 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump();
 
       expect(find.text('My Progress & Badges 🏆'), findsOneWidget);
       expect(find.text('No badges available yet.'), findsOneWidget);
@@ -570,12 +592,14 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump();
 
-      expect(find.text('My Wellbeing Buddy 🤖'), findsOneWidget);
-      expect(find.text('100% Offline AI'), findsOneWidget);
-      expect(find.text('How did I do today?'), findsOneWidget);
-      expect(find.text('Help me focus.'), findsOneWidget);
+      expect(find.text('My AI Agent 🤖'), findsOneWidget);
+      expect(find.textContaining('100% On-Device AI Agent'), findsOneWidget);
+      expect(find.text('✨ Give me a mission challenge'), findsOneWidget);
+      expect(find.text('🎯 Help me focus for 15 mins'), findsOneWidget);
     });
 
     testWidgets(
@@ -722,16 +746,23 @@ void main() {
         updatedAt: DateTime.now(),
       );
 
+      final container = ProviderContainer(
+        overrides: [
+          ...baseOverrides(),
+          authRepositoryProvider
+              .overrideWithValue(FakeAuthRepository(fakeParent)),
+          familyRepositoryProvider.overrideWithValue(FakeFamilyRepository()),
+          configurationRepositoryProvider
+              .overrideWithValue(FakeConfigurationRepository()),
+        ],
+      );
+      await container
+          .read(parentDashboardControllerProvider.notifier)
+          .loadDashboard('parent-123');
+
       await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            ...baseOverrides(),
-            authRepositoryProvider
-                .overrideWithValue(FakeAuthRepository(fakeParent)),
-            familyRepositoryProvider.overrideWithValue(FakeFamilyRepository()),
-            configurationRepositoryProvider
-                .overrideWithValue(FakeConfigurationRepository()),
-          ],
+        UncontrolledProviderScope(
+          container: container,
           child: const MaterialApp(
             home: ParentReportsScreen(),
           ),
@@ -741,7 +772,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
       await tester.pump();
 
-      expect(find.text('Approved Wellbeing Reports'), findsOneWidget);
+      expect(find.byType(FamilySelectorDropdown), findsOneWidget);
       expect(find.text('Daily Summaries'), findsOneWidget);
       expect(find.text('Weekly Digests'), findsOneWidget);
     });
@@ -757,16 +788,23 @@ void main() {
         updatedAt: DateTime.now(),
       );
 
+      final container = ProviderContainer(
+        overrides: [
+          ...baseOverrides(),
+          authRepositoryProvider
+              .overrideWithValue(FakeAuthRepository(fakeParent)),
+          familyRepositoryProvider.overrideWithValue(FakeFamilyRepository()),
+          configurationRepositoryProvider
+              .overrideWithValue(FakeConfigurationRepository()),
+        ],
+      );
+      await container
+          .read(parentDashboardControllerProvider.notifier)
+          .loadDashboard('parent-123');
+
       await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            ...baseOverrides(),
-            authRepositoryProvider
-                .overrideWithValue(FakeAuthRepository(fakeParent)),
-            familyRepositoryProvider.overrideWithValue(FakeFamilyRepository()),
-            configurationRepositoryProvider
-                .overrideWithValue(FakeConfigurationRepository()),
-          ],
+        UncontrolledProviderScope(
+          container: container,
           child: const MaterialApp(
             home: ParentReportCompareScreen(),
           ),

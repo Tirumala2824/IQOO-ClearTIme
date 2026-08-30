@@ -606,6 +606,55 @@ class ParentAIApprovedReportContext {
   }
 }
 
+enum ChildAgentActionType {
+  none,
+  missionCreated,
+  focusChallengeCreated,
+  taskBreakdown,
+  screenBreakTip,
+  habitInsight,
+}
+
+class ChildAgentAction {
+  final ChildAgentActionType type;
+  final String title;
+  final String description;
+  final int? targetMinutes;
+  final List<String> steps;
+  final String? missionId;
+
+  const ChildAgentAction({
+    required this.type,
+    required this.title,
+    this.description = '',
+    this.targetMinutes,
+    this.steps = const [],
+    this.missionId,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'type': type.name,
+        'title': title,
+        'description': description,
+        'targetMinutes': targetMinutes,
+        'steps': steps,
+        'missionId': missionId,
+      };
+
+  factory ChildAgentAction.fromJson(Map<String, dynamic> json) =>
+      ChildAgentAction(
+        type: ChildAgentActionType.values.firstWhere(
+          (e) => e.name == json['type'],
+          orElse: () => ChildAgentActionType.none,
+        ),
+        title: json['title'] as String? ?? '',
+        description: json['description'] as String? ?? '',
+        targetMinutes: json['targetMinutes'] as int?,
+        steps: List<String>.from(json['steps'] as List? ?? []),
+        missionId: json['missionId'] as String?,
+      );
+}
+
 class ChatMessage {
   final String id;
   final String text;
@@ -613,6 +662,7 @@ class ChatMessage {
   final DateTime timestamp;
   final bool isThinking;
   final StructuredAIResponse? structuredResponse;
+  final ChildAgentAction? agentAction;
 
   const ChatMessage({
     required this.id,
@@ -621,5 +671,32 @@ class ChatMessage {
     required this.timestamp,
     this.isThinking = false,
     this.structuredResponse,
+    this.agentAction,
   });
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'text': text,
+        'isUser': isUser,
+        'timestamp': timestamp.toIso8601String(),
+        'structuredResponse': structuredResponse?.toJson(),
+        'agentAction': agentAction?.toJson(),
+      };
+
+  factory ChatMessage.fromJson(Map<String, dynamic> json) => ChatMessage(
+        id: json['id'] as String,
+        text: json['text'] as String? ?? '',
+        isUser: json['isUser'] as bool? ?? false,
+        timestamp: json['timestamp'] != null
+            ? DateTime.tryParse(json['timestamp'] as String) ?? DateTime.now()
+            : DateTime.now(),
+        structuredResponse: json['structuredResponse'] != null
+            ? StructuredAIResponse.fromJson(
+                json['structuredResponse'] as Map<String, dynamic>)
+            : null,
+        agentAction: json['agentAction'] != null
+            ? ChildAgentAction.fromJson(
+                json['agentAction'] as Map<String, dynamic>)
+            : null,
+      );
 }

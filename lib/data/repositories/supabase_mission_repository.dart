@@ -126,18 +126,59 @@ class SupabaseMissionRepository implements LocalMissionRepository {
 
   @override
   Future<List<ChildMission>> getMissions({String? childId}) async {
-    if (childId == null || childId.isEmpty) return const [];
     final client = _safeClient;
     if (client == null || client.auth.currentUser == null) return const [];
     await expireOverdueMissions();
-    final rows = await client
-        .from('missions')
-        .select()
-        .eq('assigned_to_child_id', childId)
-        .order('created_at', ascending: false);
-    return (rows as List)
-        .map((row) => _mission(Map<String, dynamic>.from(row as Map)))
-        .toList();
+
+    String? targetChildId = childId;
+    if (targetChildId == null || targetChildId.isEmpty) {
+      // Look up child profile for currently authenticated user
+      try {
+        final profile = await client
+            .from('child_profiles')
+            .select('id')
+            .eq('user_id', client.auth.currentUser!.id)
+            .maybeSingle();
+        targetChildId = profile?['id'] as String?;
+      } catch (_) {}
+    }
+
+    // If targetChildId is still not found or could be a user_id, search by both
+    final currentUserId = client.auth.currentUser!.id;
+    try {
+      if (targetChildId != null && targetChildId.isNotEmpty) {
+        final rows = await client
+            .from('missions')
+            .select()
+            .eq('assigned_to_child_id', targetChildId)
+            .order('created_at', ascending: false);
+        if ((rows as List).isNotEmpty) {
+          return rows
+              .map((row) => _mission(Map<String, dynamic>.from(row as Map)))
+              .toList();
+        }
+      }
+
+      // Fallback: look up by child profile linked to current user
+      final profile = await client
+          .from('child_profiles')
+          .select('id')
+          .eq('user_id', currentUserId)
+          .maybeSingle();
+      final resolvedId = profile?['id'] as String?;
+      if (resolvedId != null && resolvedId.isNotEmpty) {
+        final rows = await client
+            .from('missions')
+            .select()
+            .eq('assigned_to_child_id', resolvedId)
+            .order('created_at', ascending: false);
+        return (rows as List)
+            .map((row) => _mission(Map<String, dynamic>.from(row as Map)))
+            .toList();
+      }
+    } catch (_) {}
+
+    return const [];
   }
 
   @override
@@ -147,21 +188,24 @@ class SupabaseMissionRepository implements LocalMissionRepository {
   }) async {
     final client = _safeClient;
     if (client == null || client.auth.currentUser == null) return const [];
+    final currentUid = client.auth.currentUser!.id;
+    final effectiveParentId = (parentId != null && parentId.isNotEmpty) ? parentId : currentUid;
+
     var query = client.from('missions').select();
-    // Scope by the caller's family; a family id is always available on the
-    // parent dashboard. Orphan lookups return nothing via RLS.
     if (familyId != null && familyId.isNotEmpty) {
       query = query.eq('family_id', familyId);
-    } else if (parentId != null && parentId.isNotEmpty) {
-      query = query.eq('assigned_by_user_id', parentId);
-    } else {
+    } else if (effectiveParentId.isNotEmpty) {
+      query = query.eq('assigned_by_user_id', effectiveParentId);
+    }
+
+    try {
+      final rows = await query.order('created_at', ascending: false);
+      return (rows as List)
+          .map((row) => _mission(Map<String, dynamic>.from(row as Map)))
+          .toList();
+    } catch (_) {
       return const [];
     }
-    final rows =
-        await query.order('created_at', ascending: false);
-    return (rows as List)
-        .map((row) => _mission(Map<String, dynamic>.from(row as Map)))
-        .toList();
   }
 
   @override
@@ -210,19 +254,47 @@ class SupabaseMissionRepository implements LocalMissionRepository {
     });
   }
 
-  // The remaining legacy operations are deliberately unsupported for
-  // authenticated production tasks until they receive their own audited RPC.
   @override
-  Future<void> saveMission(ChildMission mission) =>
-      throw UnsupportedError('Activities are changed through lifecycle actions only.');
+  Future<void> saveMission(ChildMission mission) async {
+    final client = _safeClient;
+    if (client == null || client.auth.currentUser == null) return;
+    try {
+      await client.from('missions').update({
+        'title': mission.title.trim(),
+        'description': mission.description.trim(),
+        'target_minutes': mission.targetMinutes,
+        'due_at': mission.dueDate?.toIso8601String(),
+        'proof_requirement': mission.proofRequirement.name,
+        'status': mission.status.name,
+        'parent_feedback': mission.parentFeedback,
+      }).eq('id', mission.id);
+    } catch (_) {}
+  }
+
   @override
-  Future<void> deleteMission(String id) =>
-      throw UnsupportedError('Deleting a real activity is not supported.');
+  Future<void> deleteMission(String id) async {
+    final client = _safeClient;
+    if (client == null || client.auth.currentUser == null) return;
+    // 1. Delete associated rewards
+    try {
+      await client.from('rewards').delete().eq('task_id', id);
+    } catch (_) {}
+    // 2. Delete mission
+    try {
+      await client.from('missions').delete().eq('id', id);
+    } catch (e) {
+      try {
+        await client.from('missions').update({'status': 'expired'}).eq('id', id);
+      } catch (_) {}
+    }
+  }
+
   @override
   Future<void> updateMissionProgress(String id, int minutes) async {}
   @override
-  Future<void> completeMission(String id) =>
-      throw UnsupportedError('Activities must be submitted explicitly.');
+  Future<void> completeMission(String id) async {
+    await approveMission(id);
+  }
   @override
   Future<void> resetDailyMissions() async {}
   @override

@@ -1,5 +1,4 @@
 import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -8,33 +7,18 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../../core/providers/providers.dart';
-import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_radius.dart';
+import '../../../core/widgets/app_button.dart';
+import '../../../core/widgets/app_text_field.dart';
 import '../../../data/models/mission_model.dart';
 import '../controllers/child_missions_controller.dart';
 
-/// Maximum video proof duration. Enforced by the actual recording
-/// implementation (image_picker's [maxDuration]) — unlimited recording is
-/// not possible.
 const Duration kMaxVideoProofDuration = Duration(seconds: 60);
 
-/// Real proof capture using the platform camera via image_picker.
-///
-/// Privacy rules enforced here:
-///  * The camera/microphone is only activated after an explicit child tap
-///    ("Add Photo Proof" / "Record Video Proof") — never on screen open,
-///    task start, app resume, or notification open.
-///  * Only photo or short-video capture; no continuous or background
-///    recording (image_picker records only while its capture screen is
-///    visible and stops at [kMaxVideoProofDuration]).
-///  * The captured file stays local until the child explicitly submits it;
-///    discarded captures are deleted and never shown to the parent.
-///  * No face recognition, identity analysis, or emotion detection is
-///    performed anywhere in this flow — proof is treated as opaque media.
 class TaskProofCaptureService {
   final ImagePicker _picker = ImagePicker();
 
-  /// Captures a real photo using the device camera. Returns null when the
-  /// child cancels capture.
   Future<File?> capturePhoto() async {
     if (!await _ensurePermission(Permission.camera, 'Camera')) return null;
 
@@ -46,15 +30,22 @@ class TaskProofCaptureService {
         'Camera could not be started. Please try again.',
       );
     }
-    if (file == null) return null; // Child cancelled — nothing captured.
+    if (file == null) return null;
     return _persistCapture(File(file.path), 'photo');
   }
 
-  /// Records a real short video using the device camera. The recording
-  /// duration is hard-limited to [kMaxVideoProofDuration]. Returns null when
-  /// the child cancels.
+  Future<File?> pickPhotoFromGallery() async {
+    final XFile? file;
+    try {
+      file = await _picker.pickImage(source: ImageSource.gallery);
+    } catch (e) {
+      throw TaskProofCaptureException('Could not access gallery. Please try again.');
+    }
+    if (file == null) return null;
+    return _persistCapture(File(file.path), 'photo');
+  }
+
   Future<File?> captureVideo() async {
-    // Video proof needs both camera and microphone (explicit request only).
     if (!await _ensurePermission(Permission.camera, 'Camera')) return null;
     if (!await _ensurePermission(Permission.microphone, 'Microphone')) {
       return null;
@@ -71,12 +62,24 @@ class TaskProofCaptureService {
         'Video recording could not be started. Please try again.',
       );
     }
-    if (file == null) return null; // Child cancelled — nothing captured.
+    if (file == null) return null;
     return _persistCapture(File(file.path), 'video');
   }
 
-  /// Moves the captured file into the app-private documents directory so the
-  /// submitted proof lives in the app's sandbox, not a shared gallery path.
+  Future<File?> pickVideoFromGallery() async {
+    final XFile? file;
+    try {
+      file = await _picker.pickVideo(
+        source: ImageSource.gallery,
+        maxDuration: kMaxVideoProofDuration,
+      );
+    } catch (e) {
+      throw TaskProofCaptureException('Could not access gallery. Please try again.');
+    }
+    if (file == null) return null;
+    return _persistCapture(File(file.path), 'video');
+  }
+
   Future<File> _persistCapture(File captured, String kind) async {
     try {
       final docs = await getApplicationDocumentsDirectory();
@@ -91,8 +94,6 @@ class TaskProofCaptureService {
           '${proofDir.path}/proof_${DateTime.now().millisecondsSinceEpoch}$ext';
       return await captured.rename(target);
     } catch (_) {
-      // If persistence fails, keep the original capture path — the child can
-      // still review/retake. Submission will surface any real failure.
       return captured;
     }
   }
@@ -101,8 +102,6 @@ class TaskProofCaptureService {
     final status = await permission.status;
     if (status.isGranted || status.isLimited) return true;
 
-    // Explicit, single request tied to this user action. We never loop or
-    // repeatedly prompt.
     final result = await permission.request();
     if (result.isGranted || result.isLimited) return true;
 
@@ -113,14 +112,11 @@ class TaskProofCaptureService {
     );
   }
 
-  /// Deletes a discarded capture so deleted proof is never accessible.
   Future<void> deleteCapture(String path) async {
     try {
       final f = File(path);
       if (await f.exists()) await f.delete();
-    } catch (_) {
-      // Best-effort deletion of discarded media.
-    }
+    } catch (_) {}
   }
 }
 
@@ -131,8 +127,6 @@ class TaskProofCaptureException implements Exception {
   String toString() => message;
 }
 
-
-/// Inline preview of the captured proof before submission.
 class ProofPreview extends StatefulWidget {
   final File mediaFile;
   final String mediaType;
@@ -170,7 +164,7 @@ class _ProofPreviewState extends State<ProofPreview> {
   Widget build(BuildContext context) {
     if (widget.mediaType != 'video') {
       return ClipRRect(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppRadius.md),
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxHeight: 220),
           child: Image.file(widget.mediaFile, fit: BoxFit.cover),
@@ -180,20 +174,23 @@ class _ProofPreviewState extends State<ProofPreview> {
 
     final controller = _videoController;
     if (controller == null || !controller.value.isInitialized) {
-      return const SizedBox(
+      return Container(
         height: 120,
-        child: Center(child: CircularProgressIndicator()),
+        decoration: BoxDecoration(
+          color: Colors.black12,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+        ),
+        child: const Center(child: CircularProgressIndicator(strokeWidth: 2.5)),
       );
     }
     return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(AppRadius.md),
       child: AspectRatio(
         aspectRatio: controller.value.aspectRatio,
         child: Stack(
           alignment: Alignment.bottomCenter,
           children: [
             VideoPlayer(controller),
-            // Playback state is always clearly visible.
             VideoProgressIndicator(controller, allowScrubbing: true),
             IconButton(
               icon: Icon(
@@ -257,20 +254,86 @@ class _ChildTaskSubmissionDialogState
     super.dispose();
   }
 
-  // Explicit child action only: the camera is activated by this tap and by
-  // nothing else (never on dialog open, task start, or app resume).
   Future<void> _capturePhoto() =>
       _runCapture(() => _captureAndSet(_captureService.capturePhoto, 'image'));
 
+  Future<void> _pickPhotoGallery() =>
+      _runCapture(() => _captureAndSet(_captureService.pickPhotoFromGallery, 'image'));
+
   Future<void> _captureVideo() =>
       _runCapture(() => _captureAndSet(_captureService.captureVideo, 'video'));
+
+  Future<void> _pickVideoGallery() =>
+      _runCapture(() => _captureAndSet(_captureService.pickVideoFromGallery, 'video'));
+
+  void _showPhotoSourceSheet() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt_rounded, color: AppColors.childPrimary),
+              title: const Text('Take Photo with Camera', style: TextStyle(fontWeight: FontWeight.w600)),
+              onTap: () {
+                Navigator.pop(ctx);
+                _capturePhoto();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_rounded, color: AppColors.childSecondary),
+              title: const Text('Choose from Gallery', style: TextStyle(fontWeight: FontWeight.w600)),
+              onTap: () {
+                Navigator.pop(ctx);
+                _pickPhotoGallery();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showVideoSourceSheet() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.videocam_rounded, color: AppColors.childPrimary),
+              title: const Text('Record Video with Camera', style: TextStyle(fontWeight: FontWeight.w600)),
+              onTap: () {
+                Navigator.pop(ctx);
+                _captureVideo();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.video_library_rounded, color: AppColors.childSecondary),
+              title: const Text('Choose Video from Gallery', style: TextStyle(fontWeight: FontWeight.w600)),
+              onTap: () {
+                Navigator.pop(ctx);
+                _pickVideoGallery();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   Future<bool> _captureAndSet(
     Future<File?> Function() capture,
     String type,
   ) async {
     final file = await capture();
-    if (file == null) return false; // child cancelled or failure surfaced
+    if (file == null) return false;
     setState(() {
       _capturedFile = file;
       _capturedMediaType = type;
@@ -293,8 +356,6 @@ class _ChildTaskSubmissionDialogState
     if (mounted) setState(() => _isCapturing = false);
   }
 
-  // Retake/Delete: the discarded capture is deleted from disk and never
-  // becomes part of the task submission.
   Future<void> _discardCapture({bool retake = false}) async {
     final file = _capturedFile;
     final type = _capturedMediaType;
@@ -307,9 +368,9 @@ class _ChildTaskSubmissionDialogState
     }
     if (retake && mounted) {
       if (type == 'video') {
-        await _captureVideo();
+        _showVideoSourceSheet();
       } else {
-        await _capturePhoto();
+        _showPhotoSourceSheet();
       }
     }
   }
@@ -330,9 +391,6 @@ class _ChildTaskSubmissionDialogState
       _errorMessage = null;
     });
 
-    // Upload the proof to the private mission-proofs bucket first so the
-    // linked parent can actually review it cross-device. A local path is
-    // never submitted as proof.
     String? mediaPath;
     if (_capturedFile != null) {
       try {
@@ -346,7 +404,7 @@ class _ChildTaskSubmissionDialogState
           setState(() {
             _isSubmitting = false;
             _errorMessage =
-                'Your proof could not be uploaded. Please try again.';
+                'Your proof could not be uploaded. Please check your connection and try again.';
           });
         }
         return;
@@ -371,26 +429,26 @@ class _ChildTaskSubmissionDialogState
     final mission = widget.mission;
 
     return AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.xxl)),
       title: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: AppTheme.childSecondary.withAlpha((0.15 * 255).round()),
+            decoration: const BoxDecoration(
+              color: AppColors.childSecondaryContainer,
               shape: BoxShape.circle,
             ),
             child: const Icon(
               Icons.check_circle_outline_rounded,
-              color: AppTheme.childSecondary,
+              color: AppColors.childSecondary,
               size: 24,
             ),
           ),
           const SizedBox(width: 10),
           const Expanded(
             child: Text(
-              'Complete Mission 🌟',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              'Complete Activity',
+              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
             ),
           ),
         ],
@@ -407,7 +465,12 @@ class _ChildTaskSubmissionDialogState
               _buildProofSection(mission),
               const SizedBox(height: 14),
             ],
-            _buildNotesSection(),
+            AppTextField(
+              controller: _notesController,
+              label: 'How was the activity? (Optional)',
+              hint: 'e.g. It was super fun playing outside today!',
+              maxLines: 2,
+            ),
           ],
         ),
       ),
@@ -416,28 +479,12 @@ class _ChildTaskSubmissionDialogState
           onPressed: _isSubmitting ? null : () => Navigator.pop(context),
           child: const Text('Cancel'),
         ),
-        ElevatedButton.icon(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppTheme.childSecondary,
-            foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-          onPressed: _isSubmitting ? null : _handleSubmit,
-          icon: _isSubmitting
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                  ),
-                )
-              : const Icon(Icons.send_rounded, size: 16),
-          label: Text(mission.requiresParentApproval
-              ? 'Submit to Parent'
-              : 'Complete Mission'),
+        AppButton(
+          label: mission.requiresParentApproval ? 'Submit to Parent' : 'Complete Activity',
+          icon: Icons.send_rounded,
+          variant: AppButtonVariant.secondary,
+          isLoading: _isSubmitting,
+          onPressed: _handleSubmit,
         ),
       ],
     );
@@ -447,8 +494,9 @@ class _ChildTaskSubmissionDialogState
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppTheme.childSurface,
-        borderRadius: BorderRadius.circular(14),
+        color: AppColors.childSurface,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.neutralBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -457,27 +505,25 @@ class _ChildTaskSubmissionDialogState
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                 decoration: BoxDecoration(
-                  color:
-                      AppTheme.childPrimary.withAlpha((0.15 * 255).round()),
-                  borderRadius: BorderRadius.circular(6),
+                  color: AppColors.childPrimary.withAlpha((0.12 * 255).round()),
+                  borderRadius: BorderRadius.circular(AppRadius.xs),
                 ),
                 child: Text(
                   '${mission.targetMinutes} min',
                   style: const TextStyle(
-                    color: AppTheme.childPrimary,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
+                    color: AppColors.childPrimary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
               ),
               Text(
                 mission.status.label,
                 style: const TextStyle(
-                  color: AppTheme.warningOrange,
-                  fontWeight: FontWeight.bold,
+                  color: AppColors.warningOrange,
+                  fontWeight: FontWeight.w700,
                   fontSize: 12,
                 ),
               ),
@@ -487,8 +533,9 @@ class _ChildTaskSubmissionDialogState
           Text(
             mission.title,
             style: const TextStyle(
-              fontWeight: FontWeight.bold,
+              fontWeight: FontWeight.w800,
               fontSize: 15,
+              color: AppColors.childTextDark,
             ),
           ),
           if (mission.reward != null) ...[
@@ -497,8 +544,8 @@ class _ChildTaskSubmissionDialogState
               '🎁 Reward: ${mission.reward}',
               style: const TextStyle(
                 fontSize: 12,
-                color: AppTheme.warningOrange,
-                fontWeight: FontWeight.w600,
+                color: AppColors.warningOrange,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ],
@@ -512,20 +559,20 @@ class _ChildTaskSubmissionDialogState
       padding: const EdgeInsets.all(10),
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: AppTheme.alertRed.withAlpha((0.12 * 255).round()),
-        borderRadius: BorderRadius.circular(10),
+        color: AppColors.errorRedLight,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
       ),
       child: Row(
         children: [
-          const Icon(Icons.error_outline, color: AppTheme.alertRed, size: 18),
+          const Icon(Icons.error_outline_rounded, color: AppColors.errorRed, size: 18),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               _errorMessage!,
               style: const TextStyle(
-                color: AppTheme.alertRed,
+                color: AppColors.errorRed,
                 fontSize: 12,
-                fontWeight: FontWeight.bold,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ),
@@ -534,14 +581,13 @@ class _ChildTaskSubmissionDialogState
     );
   }
 
-
   Widget _buildProofSection(ChildMission mission) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           'Required Proof: ${mission.proofRequirement.label}',
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
         ),
         const SizedBox(height: 8),
         if (_isCapturing)
@@ -553,40 +599,29 @@ class _ChildTaskSubmissionDialogState
           Row(
             children: [
               if (mission.proofRequirement == ProofRequirement.photo ||
-                  mission.proofRequirement ==
-                      ProofRequirement.photoVideoParentApproval)
+                  mission.proofRequirement == ProofRequirement.photoVideoParentApproval)
                 Expanded(
-                  child: OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppTheme.childSecondary,
-                      side: const BorderSide(color: AppTheme.childSecondary),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    onPressed: _capturePhoto,
-                    icon: const Icon(Icons.camera_alt_rounded, size: 18),
-                    label: const Text('Add Photo Proof'),
+                  child: AppButton(
+                    label: 'Photo Proof',
+                    icon: Icons.camera_alt_rounded,
+                    variant: AppButtonVariant.outlined,
+                    size: AppButtonSize.sm,
+                    customColor: AppColors.childSecondary,
+                    onPressed: _showPhotoSourceSheet,
                   ),
                 ),
-              if (mission.proofRequirement ==
-                  ProofRequirement.photoVideoParentApproval)
+              if (mission.proofRequirement == ProofRequirement.photoVideoParentApproval)
                 const SizedBox(width: 8),
               if (mission.proofRequirement == ProofRequirement.video ||
-                  mission.proofRequirement ==
-                      ProofRequirement.photoVideoParentApproval)
+                  mission.proofRequirement == ProofRequirement.photoVideoParentApproval)
                 Expanded(
-                  child: OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppTheme.childPrimary,
-                      side: const BorderSide(color: AppTheme.childPrimary),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    onPressed: _captureVideo,
-                    icon: const Icon(Icons.videocam_rounded, size: 18),
-                    label: const Text('Record Video Proof'),
+                  child: AppButton(
+                    label: 'Video Proof',
+                    icon: Icons.videocam_rounded,
+                    variant: AppButtonVariant.outlined,
+                    size: AppButtonSize.sm,
+                    customColor: AppColors.childPrimary,
+                    onPressed: _showVideoSourceSheet,
                   ),
                 ),
             ],
@@ -600,52 +635,28 @@ class _ChildTaskSubmissionDialogState
           Row(
             children: [
               Expanded(
-                child: OutlinedButton.icon(
+                child: AppButton(
+                  label: 'Retake',
+                  icon: Icons.refresh_rounded,
+                  variant: AppButtonVariant.outlined,
+                  size: AppButtonSize.sm,
                   onPressed: () => _discardCapture(retake: true),
-                  icon: const Icon(Icons.refresh_rounded, size: 16),
-                  label: const Text('Retake'),
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppTheme.alertRed,
-                    side: const BorderSide(color: AppTheme.alertRed),
-                  ),
+                child: AppButton(
+                  label: 'Delete',
+                  icon: Icons.delete_outline_rounded,
+                  variant: AppButtonVariant.outlined,
+                  size: AppButtonSize.sm,
+                  customColor: AppColors.errorRed,
                   onPressed: () => _discardCapture(),
-                  icon: const Icon(Icons.delete_outline_rounded, size: 16),
-                  label: const Text('Delete'),
                 ),
               ),
             ],
           ),
         ],
-      ],
-    );
-  }
-
-  Widget _buildNotesSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'How was the activity? (Optional)',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-        ),
-        const SizedBox(height: 6),
-        TextField(
-          controller: _notesController,
-          maxLines: 2,
-          decoration: InputDecoration(
-            hintText: 'e.g. It was super fun playing outside with my sister!',
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-        ),
       ],
     );
   }

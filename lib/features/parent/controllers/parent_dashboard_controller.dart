@@ -272,6 +272,45 @@ class ParentDashboardController extends StateNotifier<ParentDashboardState> {
     await loadDashboard(userId, forceFamily: newFamily);
   }
 
+  Future<bool> createNewFamily(String name, String userId) async {
+    state = state.copyWith(isLoading: true, clearError: true);
+    try {
+      final newFamily = await _familyRepository.createFamily(
+        name: name.trim(),
+        adminUserId: userId,
+      );
+      await loadDashboard(userId, forceFamily: newFamily);
+      return true;
+    } catch (e) {
+      state = state.copyWith(isLoading: false, errorMessage: e.toString());
+      return false;
+    }
+  }
+
+  Future<bool> renameFamily(String familyId, String newName, String userId) async {
+    state = state.copyWith(isLoading: true, clearError: true);
+    try {
+      final updated = await _familyRepository.updateFamily(familyId, name: newName);
+      await loadDashboard(userId, forceFamily: updated);
+      return true;
+    } catch (e) {
+      state = state.copyWith(isLoading: false, errorMessage: e.toString());
+      return false;
+    }
+  }
+
+  Future<bool> deleteCurrentFamily(String familyId, String userId) async {
+    state = state.copyWith(isLoading: true, clearError: true);
+    try {
+      await _familyRepository.deleteFamily(familyId);
+      await loadDashboard(userId);
+      return true;
+    } catch (e) {
+      state = state.copyWith(isLoading: false, errorMessage: e.toString());
+      return false;
+    }
+  }
+
   /// Refreshes parent task state when the child starts or submits an
   /// activity anywhere, so cross-device visibility is immediate.
   void _subscribeRealtime(String familyId, String userId) {
@@ -374,11 +413,13 @@ class ParentDashboardController extends StateNotifier<ParentDashboardState> {
       }
 
       final updatedTasks = await _missionRepository.getMissionsForParent(
-        parentId: task?.assignedByParentId,
+        parentId: task?.assignedByParentId ?? state.family?.adminUserId,
+        familyId: state.family?.id,
       );
-      final updatedRewards = task?.assignedByParentId == null
+      final parentUid = task?.assignedByParentId ?? state.family?.adminUserId;
+      final updatedRewards = parentUid == null
           ? state.rewards
-          : await _rewardRepository.getRewardsForParent(task!.assignedByParentId!);
+          : await _rewardRepository.getRewardsForParent(parentUid);
       state = state.copyWith(parentTasks: updatedTasks, rewards: updatedRewards);
 
       if (task != null) {
@@ -408,7 +449,8 @@ class ParentDashboardController extends StateNotifier<ParentDashboardState> {
         feedback: feedback,
       );
       final updatedTasks = await _missionRepository.getMissionsForParent(
-        parentId: task?.assignedByParentId,
+        parentId: task?.assignedByParentId ?? state.family?.adminUserId,
+        familyId: state.family?.id,
       );
       state = state.copyWith(parentTasks: updatedTasks);
 
@@ -423,10 +465,27 @@ class ParentDashboardController extends StateNotifier<ParentDashboardState> {
     }
   }
 
+  Future<void> updateParentTask(ChildMission updatedMission) async {
+    state = state.copyWith(isLoading: true, clearError: true);
+    try {
+      await _missionRepository.saveMission(updatedMission);
+      final updatedTasks = await _missionRepository.getMissionsForParent(
+        parentId: state.family?.adminUserId,
+        familyId: state.family?.id,
+      );
+      state = state.copyWith(parentTasks: updatedTasks, isLoading: false);
+    } catch (e) {
+      state = state.copyWith(isLoading: false, errorMessage: e.toString());
+    }
+  }
+
   Future<void> deleteParentTask(String taskId) async {
     try {
       await _missionRepository.deleteMission(taskId);
-      final updatedTasks = await _missionRepository.getMissionsForParent();
+      final updatedTasks = await _missionRepository.getMissionsForParent(
+        parentId: state.family?.adminUserId,
+        familyId: state.family?.id,
+      );
       state = state.copyWith(parentTasks: updatedTasks);
     } catch (e) {
       state = state.copyWith(errorMessage: e.toString());
@@ -435,7 +494,10 @@ class ParentDashboardController extends StateNotifier<ParentDashboardState> {
 
   Future<void> refreshParentTasks() async {
     try {
-      final updatedTasks = await _missionRepository.getMissionsForParent();
+      final updatedTasks = await _missionRepository.getMissionsForParent(
+        parentId: state.family?.adminUserId,
+        familyId: state.family?.id,
+      );
       state = state.copyWith(parentTasks: updatedTasks);
     } catch (e) {
       state = state.copyWith(errorMessage: e.toString());

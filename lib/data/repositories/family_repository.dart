@@ -45,6 +45,10 @@ abstract class FamilyRepository {
     int? age,
     int avatarIndex = 0,
   });
+
+  Future<Family> updateFamily(String familyId, {required String name});
+
+  Future<void> deleteFamily(String familyId);
 }
 
 class SupabaseFamilyRepository implements FamilyRepository {
@@ -451,6 +455,38 @@ class SupabaseFamilyRepository implements FamilyRepository {
     } catch (e) {
       if (e is AppException) rethrow;
       throw AppInvitationException('Could not redeem invitation: $e');
+    }
+  }
+
+  @override
+  Future<Family> updateFamily(String familyId, {required String name}) async {
+    final nowIso = DateTime.now().toIso8601String();
+    try {
+      final res = await _client
+          .from('families')
+          .update({
+            'name': name.trim(),
+            'updated_at': nowIso,
+          })
+          .eq('id', familyId)
+          .select()
+          .single();
+      return Family.fromJson(res);
+    } on PostgrestException catch (e) {
+      throw AppDatabaseException('Error updating family: ${e.message}');
+    } catch (e) {
+      throw AppDatabaseException('Unexpected error updating family: $e');
+    }
+  }
+
+  @override
+  Future<void> deleteFamily(String familyId) async {
+    try {
+      await _client.from('families').delete().eq('id', familyId);
+    } on PostgrestException catch (e) {
+      throw AppDatabaseException('Error deleting family: ${e.message}');
+    } catch (e) {
+      throw AppDatabaseException('Unexpected error deleting family: $e');
     }
   }
 }

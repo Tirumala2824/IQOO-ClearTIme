@@ -4,7 +4,11 @@ import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_routes.dart';
 import '../../../core/providers/providers.dart';
 import '../../../core/services/abstractions/usage_data_provider.dart';
-import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_radius.dart';
+import '../../../core/widgets/app_avatar.dart';
+import '../../../core/widgets/app_button.dart';
+import '../../../core/widgets/app_card.dart';
 import '../../../data/models/approved_report_model.dart';
 import '../../../data/models/llm_models.dart';
 import '../../../data/models/notification_pref_model.dart';
@@ -12,11 +16,6 @@ import '../../../data/models/reflection_model.dart';
 import '../../authentication/controllers/auth_controller.dart';
 import '../controllers/child_dashboard_controller.dart';
 
-/// My Profile & Privacy — rebuilt from real state.
-///
-/// Shows the real child/family profile (or a setup state), allows authorized
-/// profile edits, persists notification preferences, and displays live
-/// privacy capability cards. No fallback names or fabricated data.
 class ChildSettingsScreen extends ConsumerStatefulWidget {
   const ChildSettingsScreen({super.key});
 
@@ -93,7 +92,8 @@ class _ChildSettingsScreenState extends ConsumerState<ChildSettingsScreen> {
     final result = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Edit Profile'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.xl)),
+        title: const Text('Edit Profile', style: TextStyle(fontWeight: FontWeight.w800)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -115,6 +115,7 @@ class _ChildSettingsScreenState extends ConsumerState<ChildSettingsScreen> {
             child: const Text('Cancel'),
           ),
           ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.childSecondary),
             onPressed: () async {
               final nickname = nicknameController.text.trim();
               if (nickname.isEmpty) return;
@@ -141,7 +142,7 @@ class _ChildSettingsScreenState extends ConsumerState<ChildSettingsScreen> {
                 }
               }
             },
-            child: const Text('Save'),
+            child: const Text('Save', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -161,85 +162,60 @@ class _ChildSettingsScreenState extends ConsumerState<ChildSettingsScreen> {
     final childName = profile?.nickname;
 
     return Scaffold(
-      backgroundColor: AppTheme.childSurface,
+      backgroundColor: AppColors.childSurface,
       appBar: AppBar(
-        backgroundColor: AppTheme.childSurface,
-        elevation: 0,
+        backgroundColor: AppColors.childSurface,
         title: const Text(
-          'My Profile & Privacy 👤',
+          'My Profile & Privacy',
           style: TextStyle(
             fontWeight: FontWeight.w800,
-            fontSize: 22,
-            color: AppTheme.childTextDark,
+            fontSize: 20,
+            color: AppColors.childTextDark,
           ),
         ),
       ),
       body: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
         children: [
-          // ─── 1. PROFILE CARD (real state only) ───
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: AppTheme.neutralBorder),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withAlpha((0.02 * 255).round()),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
+          // 1. Profile Card
+          AppCard(
             child: profile == null
-                ? const Column(
+                ? Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         children: [
-                          Icon(Icons.person_off_outlined,
-                              color: AppTheme.neutralMuted),
-                          SizedBox(width: 12),
+                          const Icon(Icons.person_off_outlined,
+                              color: AppColors.neutralMuted),
+                          const SizedBox(width: 12),
                           Expanded(
                             child: Text(
                               'Profile setup needed',
                               style: TextStyle(
                                 fontWeight: FontWeight.w800,
                                 fontSize: 18,
-                                color: AppTheme.childTextDark,
+                                color: AppColors.childTextDark,
                               ),
                             ),
                           ),
                         ],
                       ),
-                      SizedBox(height: 8),
-                      Text(
-                        'Join a family with your parent\'s invitation to '
-                        'complete your profile.',
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Join a family with your parent\'s invitation to complete your profile.',
                         style: TextStyle(
-                          color: AppTheme.neutralMuted,
+                          color: AppColors.neutralMuted,
                           fontSize: 13,
                         ),
                       ),
-                      SizedBox(height: 12),
                     ],
                   )
                 : Row(
                     children: [
-                      CircleAvatar(
-                        radius: 32,
-                        backgroundColor: AppTheme.childPrimary
-                            .withAlpha((0.15 * 255).round()),
-                        child: Text(
-                          childName!.isNotEmpty
-                              ? childName.substring(0, 1).toUpperCase()
-                              : '?',
-                          style: const TextStyle(
-                            fontSize: 28,
-                            color: AppTheme.childPrimary,
-                          ),
-                        ),
+                      AppAvatar(
+                        name: childName,
+                        radius: 28,
+                        isChild: true,
                       ),
                       const SizedBox(width: 16),
                       Expanded(
@@ -247,20 +223,20 @@ class _ChildSettingsScreenState extends ConsumerState<ChildSettingsScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              childName,
+                              childName ?? 'Child',
                               style: const TextStyle(
                                 fontWeight: FontWeight.w800,
-                                fontSize: 20,
-                                color: AppTheme.childTextDark,
+                                fontSize: 19,
+                                color: AppColors.childTextDark,
                               ),
                             ),
-                            const SizedBox(height: 4),
+                            const SizedBox(height: 2),
                             Text(
                               family?.name != null
                                   ? '🏡 Member of ${family!.name}'
                                   : '🏡 Not joined to a family yet',
                               style: const TextStyle(
-                                color: AppTheme.neutralMuted,
+                                color: AppColors.neutralMuted,
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -277,15 +253,15 @@ class _ChildSettingsScreenState extends ConsumerState<ChildSettingsScreen> {
                   ),
           ),
 
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
 
-          // ─── 2. PRIVACY CAPABILITY CARDS (live state) ───
+          // 2. Privacy Capabilities
           const Text(
             'Your Privacy at a Glance 🛡️',
             style: TextStyle(
               fontWeight: FontWeight.w800,
-              fontSize: 16,
-              color: AppTheme.childTextDark,
+              fontSize: 15,
+              color: AppColors.childTextDark,
             ),
           ),
           const SizedBox(height: 8),
@@ -299,121 +275,89 @@ class _ChildSettingsScreenState extends ConsumerState<ChildSettingsScreen> {
             icon: Icons.lock_outline_rounded,
             title: 'Encrypted local storage',
             description:
-                'Goals, reflections, and activity summaries are stored '
-                'encrypted on this device only.',
+                'Goals, reflections, and activity summaries are stored encrypted on this device only.',
             ready: true,
           ),
           _AiReadinessCard(ref: ref),
           _ReflectionStorageCard(ref: ref),
           _ReportSharingCard(ref: ref),
 
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
 
-          // ─── 3. PLAIN-LANGUAGE PRIVACY ───
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(22),
-              border: Border.all(
-                color: AppTheme.childSecondary.withAlpha((0.3 * 255).round()),
-              ),
-            ),
+          // 3. Plain Language Privacy Card
+          AppCard(
+            borderColor: AppColors.childSecondary.withAlpha((0.4 * 255).round()),
             child: const Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   'What stays on your device',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: AppColors.childTextDark),
                 ),
-                SizedBox(height: 8),
+                SizedBox(height: 6),
                 Text(
-                  'Your raw activity (which apps you used), your private '
-                  'reflections, and your chats with the wellbeing buddy stay '
-                  'on this phone. They are never uploaded to the internet.',
-                  style: TextStyle(fontSize: 12.5, height: 1.4),
+                  'Your raw app usage, your private reflections, and your chats with the wellbeing buddy stay on this phone. They are never uploaded to the internet.',
+                  style: TextStyle(fontSize: 12.5, height: 1.4, color: AppColors.childTextSecondary),
                 ),
                 SizedBox(height: 12),
                 Text(
                   'What is shared with your parents',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: AppColors.childTextDark),
                 ),
-                SizedBox(height: 8),
+                SizedBox(height: 6),
                 Text(
-                  'Only an approved summary report — totals and trends, '
-                  'never app names or private notes — is shared with your '
-                  'linked parents when a report is generated.',
-                  style: TextStyle(fontSize: 12.5, height: 1.4),
+                  'Only an approved summary report — totals and trends, never app names or private notes — is shared with your linked parents when a report is generated.',
+                  style: TextStyle(fontSize: 12.5, height: 1.4, color: AppColors.childTextSecondary),
                 ),
               ],
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // 4. Notification Preferences
+          const Text(
+            'Preferences ⚙️',
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: 15,
+              color: AppColors.childTextDark,
+            ),
+          ),
+          const SizedBox(height: 8),
+          AppCard(
+            padding: EdgeInsets.zero,
+            child: SwitchListTile(
+              secondary: const Icon(Icons.notifications_active_outlined,
+                  color: AppColors.childSecondary, size: 24),
+              title: const Text(
+                'Mindful Wellbeing Alerts',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+              ),
+              subtitle: const Text(
+                'Friendly reminders to take eye breaks and celebrate completed activities.',
+                style: TextStyle(fontSize: 12, color: AppColors.neutralMuted),
+              ),
+              value: _notificationPrefs?.instantAlerts ?? true,
+              activeThumbColor: AppColors.childSecondary,
+              onChanged: _prefsLoading ? null : _setInstantAlerts,
             ),
           ),
 
           const SizedBox(height: 24),
 
-          // ─── 4. NOTIFICATION PREFERENCES (persisted) ───
-          const Text(
-            'Preferences ⚙️',
-            style: TextStyle(
-              fontWeight: FontWeight.w800,
-              fontSize: 16,
-              color: AppTheme.childTextDark,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(22),
-              border: Border.all(color: AppTheme.neutralBorder),
-            ),
-            child: Column(
-              children: [
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  secondary: const Icon(Icons.notifications_active_outlined,
-                      color: AppTheme.childSecondary, size: 26),
-                  title: const Text(
-                    'Gentle Wellbeing Alerts',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                  ),
-                  subtitle: const Text(
-                    'Friendly reminders to take eye breaks and celebrate completed activities.',
-                    style: TextStyle(fontSize: 12, color: AppTheme.neutralMuted),
-                  ),
-                  value:
-                      _notificationPrefs?.instantAlerts ?? true,
-                  activeThumbColor: AppTheme.childSecondary,
-                  onChanged: _prefsLoading ? null : _setInstantAlerts,
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 32),
-
-          // ─── 5. SIGN OUT BUTTON ───
-          OutlinedButton.icon(
+          // 5. Sign Out Button
+          AppButton(
+            label: 'Sign Out',
+            icon: Icons.logout_rounded,
+            variant: AppButtonVariant.outlined,
+            customColor: AppColors.errorRed,
             onPressed: () async {
               await ref.read(authControllerProvider.notifier).signOut();
               if (context.mounted) {
                 context.go(AppRoutes.login);
               }
             },
-            icon: const Icon(Icons.logout_rounded, color: AppTheme.errorRed),
-            label: const Text('Sign Out',
-                style: TextStyle(
-                  color: AppTheme.errorRed,
-                  fontWeight: FontWeight.bold,
-                )),
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              side: const BorderSide(color: AppTheme.errorRed),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-            ),
           ),
           const SizedBox(height: 24),
         ],
@@ -450,19 +394,14 @@ class _CapabilityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return AppCard(
       margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.neutralBorder),
-      ),
+      padding: const EdgeInsets.all(12),
       child: Row(
         children: [
           Icon(icon,
               size: 22,
-              color: ready ? AppTheme.successGreen : AppTheme.neutralMuted),
+              color: ready ? AppColors.successGreen : AppColors.neutralMuted),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -470,12 +409,12 @@ class _CapabilityCard extends StatelessWidget {
               children: [
                 Text(title,
                     style: const TextStyle(
-                        fontWeight: FontWeight.bold, fontSize: 13.5)),
+                        fontWeight: FontWeight.w700, fontSize: 13.5, color: AppColors.childTextDark)),
                 const SizedBox(height: 2),
                 Text(description,
                     style: const TextStyle(
-                        fontSize: 11.5,
-                        color: AppTheme.neutralMuted,
+                        fontSize: 12,
+                        color: AppColors.neutralMuted,
                         height: 1.3)),
               ],
             ),
@@ -567,10 +506,8 @@ class _ReportSharingCard extends ConsumerWidget {
           icon: Icons.summarize_outlined,
           title: 'Report sharing',
           description: count > 0
-              ? '$count approved snapshot${count == 1 ? '' : 's'} shared '
-                  'with linked parents. Raw activity is never shared.'
-              : 'No reports shared yet. Only approved summaries are ever '
-                  'shared.',
+              ? '$count approved snapshot${count == 1 ? '' : 's'} shared with linked parents. Raw activity is never shared.'
+              : 'No reports shared yet. Only approved summaries are ever shared.',
           ready: true,
         );
       },

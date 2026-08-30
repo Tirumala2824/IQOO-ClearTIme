@@ -86,15 +86,21 @@ class ChildMissionsController extends StateNotifier<ChildMissionsState> {
   Future<void> loadMissions({String? childId}) async {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
-      final targetChildId = childId ?? state.activeChildId;
+      final targetChildId = (childId != null && childId.isNotEmpty)
+          ? childId
+          : state.activeChildId;
       final list = await _repository.getMissions(childId: targetChildId);
-      final rewards = targetChildId == null
+      final effectiveChildId = targetChildId ??
+          (list.isNotEmpty ? list.first.assignedToChildId : null);
+
+      final rewards = effectiveChildId == null
           ? const <Reward>[]
-          : await _rewardRepository.getRewardsForChild(targetChildId);
+          : await _rewardRepository.getRewardsForChild(effectiveChildId);
+
       state = state.copyWith(
         missions: list,
         rewards: rewards,
-        activeChildId: targetChildId,
+        activeChildId: effectiveChildId,
         isLoading: false,
       );
     } catch (e) {

@@ -96,22 +96,35 @@ class ChildAiCoachController extends StateNotifier<ChildAiCoachState> {
         reflection: dashState.todayReflection,
       );
 
-      final reply = await _coachService.askCoach(
+      final reply = await _coachService.askCoachAgent(
         question: text.trim(),
         context: aiContext,
         childNickname: dashState.profile?.nickname,
+        missions: dashState.missions,
+        goals: dashState.goals,
       );
 
-      final aiMsg = ChatMessage(
-        id: 'reply-${DateTime.now().millisecondsSinceEpoch}',
-        text: reply.answer,
-        isUser: false,
-        timestamp: DateTime.now(),
-        structuredResponse: reply,
-      );
+      // Autonomous agent execution: Persist mission directly if generated
+      if (reply.agentAction != null &&
+          (reply.agentAction!.type == ChildAgentActionType.missionCreated ||
+              reply.agentAction!.type ==
+                  ChildAgentActionType.focusChallengeCreated)) {
+        try {
+          final missionRepo = _ref.read(localMissionRepositoryProvider);
+          await missionRepo.createLocalAiMission(
+            title: reply.agentAction!.title,
+            description: reply.agentAction!.description,
+            targetMinutes: reply.agentAction!.targetMinutes ?? 20,
+          );
+          final updatedMissions = await missionRepo.getMissions();
+          _ref
+              .read(childDashboardControllerProvider.notifier)
+              .updateMissionsLocally(updatedMissions);
+        } catch (_) {}
+      }
 
       state = state.copyWith(
-        messages: [...state.messages, aiMsg],
+        messages: [...state.messages, reply],
         isThinking: false,
       );
     } catch (e) {
@@ -121,21 +134,50 @@ class ChildAiCoachController extends StateNotifier<ChildAiCoachState> {
       );
     }
   }
+
+  void startNewConversation() {
+    final childName =
+        _ref.read(childDashboardControllerProvider).profile?.nickname;
+    final welcomeName = (childName != null && childName.isNotEmpty)
+        ? 'Hi $childName! 👋'
+        : 'Hi there! 👋';
+
+    state = ChildAiCoachState(
+      messages: [
+        ChatMessage(
+          id: 'msg-welcome-${DateTime.now().millisecondsSinceEpoch}',
+          text:
+              "$welcomeName I'm your on-device AI Wellbeing Agent! I can create offline missions, help you focus, break down activities, or chat about your screen balance. What would you like to do?",
+          isUser: false,
+          timestamp: DateTime.now(),
+        ),
+      ],
+      modelInfo: state.modelInfo,
+    );
+  }
+
+  void clearConversationHistory() {
+    state = ChildAiCoachState(
+      messages: [],
+      modelInfo: state.modelInfo,
+    );
+  }
 }
 
 final childAiCoachControllerProvider =
     StateNotifierProvider<ChildAiCoachController, ChildAiCoachState>((ref) {
   final coach = ref.watch(localAICoachServiceProvider);
   final builder = ref.watch(localAIContextBuilderProvider);
-  final childName = ref.read(childDashboardControllerProvider).profile?.nickname;
-    final welcomeName = (childName != null && childName.isNotEmpty)
-        ? 'Hi $childName! 👋'
-        : 'Hi there! 👋';
+  final childName =
+      ref.read(childDashboardControllerProvider).profile?.nickname;
+  final welcomeName = (childName != null && childName.isNotEmpty)
+      ? 'Hi $childName! 👋'
+      : 'Hi there! 👋';
 
-    return ChildAiCoachController(
-      coachService: coach,
-      contextBuilder: builder,
-      ref: ref,
-      welcomeName: welcomeName,
-    );
+  return ChildAiCoachController(
+    coachService: coach,
+    contextBuilder: builder,
+    ref: ref,
+    welcomeName: welcomeName,
+  );
 });

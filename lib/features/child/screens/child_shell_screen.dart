@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_routes.dart';
-import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/app_colors.dart';
 
+/// Child Navigation Shell providing 4 clear, welcoming destinations.
 class ChildShellScreen extends StatelessWidget {
   final Widget child;
 
@@ -53,32 +54,28 @@ class ChildShellScreen extends StatelessWidget {
         selectedIndex: currentIndex,
         onDestinationSelected: (index) => _onItemTapped(index, context),
         backgroundColor: Colors.white,
-        elevation: 8,
-        indicatorColor: AppTheme.childSecondary.withAlpha((0.2 * 255).round()),
+        elevation: 6,
+        indicatorColor: AppColors.childSecondary.withAlpha((0.18 * 255).round()),
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.home_outlined),
-            selectedIcon:
-                Icon(Icons.home_rounded, color: AppTheme.childSecondary),
+            selectedIcon: Icon(Icons.home_rounded, color: AppColors.childSecondary),
             label: 'Home',
           ),
           NavigationDestination(
-            icon: Icon(Icons.track_changes_rounded),
-            selectedIcon:
-                Icon(Icons.track_changes_rounded, color: AppTheme.childSecondary),
-            label: 'Goal',
+            icon: Icon(Icons.track_changes_outlined),
+            selectedIcon: Icon(Icons.track_changes_rounded, color: AppColors.childSecondary),
+            label: 'Activities',
           ),
           NavigationDestination(
             icon: Icon(Icons.emoji_events_outlined),
-            selectedIcon: Icon(Icons.emoji_events_rounded,
-                color: AppTheme.childSecondary),
+            selectedIcon: Icon(Icons.emoji_events_rounded, color: AppColors.childSecondary),
             label: 'Progress',
           ),
           NavigationDestination(
-            icon: Icon(Icons.face_outlined),
-            selectedIcon:
-                Icon(Icons.face_rounded, color: AppTheme.childSecondary),
-            label: 'Me',
+            icon: Icon(Icons.person_outline_rounded),
+            selectedIcon: Icon(Icons.person_rounded, color: AppColors.childSecondary),
+            label: 'Profile',
           ),
         ],
       ),

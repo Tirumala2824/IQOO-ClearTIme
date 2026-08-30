@@ -1,25 +1,33 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import '../../../core/theme/app_theme.dart';
+import '../../../core/providers/providers.dart';
+import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_radius.dart';
+import '../../../core/widgets/app_button.dart';
+import '../../../core/widgets/app_text_field.dart';
 import '../../../data/models/mission_model.dart';
 import '../../../data/models/child_profile_model.dart';
+import '../../../services/llm/ai_mission_generator_service.dart';
 import '../controllers/parent_dashboard_controller.dart';
 
 class ParentCreateTaskDialog extends ConsumerStatefulWidget {
   final List<ChildProfile> children;
   final String? initialChildId;
+  final ChildMission? existingTask;
 
   const ParentCreateTaskDialog({
     super.key,
     required this.children,
     this.initialChildId,
+    this.existingTask,
   });
 
   static Future<bool?> show(
     BuildContext context, {
     required List<ChildProfile> children,
     String? initialChildId,
+    ChildMission? existingTask,
   }) {
     return showDialog<bool>(
       context: context,
@@ -27,6 +35,7 @@ class ParentCreateTaskDialog extends ConsumerStatefulWidget {
       builder: (ctx) => ParentCreateTaskDialog(
         children: children,
         initialChildId: initialChildId,
+        existingTask: existingTask,
       ),
     );
   }
@@ -38,10 +47,10 @@ class ParentCreateTaskDialog extends ConsumerStatefulWidget {
 
 class _ParentCreateTaskDialogState extends ConsumerState<ParentCreateTaskDialog> {
   final _formKey = GlobalKey<FormState>();
-  final _titleController = TextEditingController();
-  final _descController = TextEditingController();
-  final _durationController = TextEditingController(text: '30');
-  final _rewardController = TextEditingController();
+  late TextEditingController _titleController;
+  late TextEditingController _descController;
+  late TextEditingController _durationController;
+  late TextEditingController _rewardController;
 
   String? _selectedChildId;
   ProofRequirement _selectedProof = ProofRequirement.noProof;
@@ -50,10 +59,76 @@ class _ParentCreateTaskDialogState extends ConsumerState<ParentCreateTaskDialog>
   bool _isSubmitting = false;
   String? _errorMessage;
 
+  bool _isGeneratingAi = false;
+  List<GeneratedMissionIdea> _aiSuggestions = [];
+
+  static const List<Map<String, dynamic>> _quickPresets = [
+    {'title': 'Reading Time', 'desc': 'Spend 30 minutes reading a favorite book or article.', 'duration': 30, 'icon': Icons.menu_book_rounded},
+    {'title': 'Outdoor Play', 'desc': 'Play outside, ride a bike, or play in the park.', 'duration': 45, 'icon': Icons.park_rounded},
+    {'title': 'Help at Home', 'desc': 'Help tidy up your room, water plants, or help with chores.', 'duration': 20, 'icon': Icons.cleaning_services_rounded},
+    {'title': 'Exercise & Sport', 'desc': 'Do some physical activity, stretching, or sports.', 'duration': 30, 'icon': Icons.fitness_center_rounded},
+  ];
+
+  bool get isEdit => widget.existingTask != null;
+
+  Future<void> _generateAiSuggestions() async {
+    if (_selectedChildId == null) return;
+    final child = widget.children.firstWhere(
+      (c) => c.id == _selectedChildId,
+      orElse: () => widget.children.first,
+    );
+
+    setState(() => _isGeneratingAi = true);
+    try {
+      final generator = ref.read(aiMissionGeneratorServiceProvider);
+      final parentState = ref.read(parentDashboardControllerProvider);
+      final usage = parentState.childUsageSummaries[child.id];
+
+      final ideas = await generator.generateMissionsForParent(
+        child: child,
+        usage: usage,
+        count: 3,
+      );
+
+      setState(() {
+        _aiSuggestions = ideas;
+        _isGeneratingAi = false;
+      });
+    } catch (_) {
+      setState(() => _isGeneratingAi = false);
+    }
+  }
+
+  void _applyAiIdea(GeneratedMissionIdea idea) {
+    setState(() {
+      _titleController.text = idea.title;
+      _descController.text = idea.description;
+      _durationController.text = idea.targetMinutes.toString();
+      if (idea.suggestedReward != null && idea.suggestedReward!.isNotEmpty) {
+        _rewardController.text = idea.suggestedReward!;
+      }
+    });
+  }
+
   @override
   void initState() {
     super.initState();
-    if (widget.children.isNotEmpty) {
+    final existing = widget.existingTask;
+    _titleController = TextEditingController(text: existing?.title ?? '');
+    _descController = TextEditingController(text: existing?.description ?? '');
+    _durationController = TextEditingController(
+        text: (existing?.targetMinutes ?? 30).toString());
+    _rewardController = TextEditingController(text: existing?.reward ?? '');
+
+    if (existing != null) {
+      _selectedProof = existing.proofRequirement;
+      _selectedChildId = existing.assignedToChildId;
+      if (existing.dueDate != null) {
+        _selectedDueDate = existing.dueDate;
+        _selectedDueTime = TimeOfDay(
+            hour: existing.dueDate!.hour, minute: existing.dueDate!.minute);
+      }
+    } else if (widget.children.isNotEmpty) {
       final initial = widget.children.any((c) => c.id == widget.initialChildId)
           ? widget.initialChildId
           : widget.children.first.id;
@@ -68,6 +143,14 @@ class _ParentCreateTaskDialogState extends ConsumerState<ParentCreateTaskDialog>
     _durationController.dispose();
     _rewardController.dispose();
     super.dispose();
+  }
+
+  void _applyPreset(Map<String, dynamic> preset) {
+    setState(() {
+      _titleController.text = preset['title'] as String;
+      _descController.text = preset['desc'] as String;
+      _durationController.text = (preset['duration'] as int).toString();
+    });
   }
 
   Future<void> _pickDueDate() async {
@@ -110,10 +193,10 @@ class _ParentCreateTaskDialogState extends ConsumerState<ParentCreateTaskDialog>
     );
   }
 
-  Future<void> _handleCreate() async {
+  Future<void> _handleSave() async {
     if (!_formKey.currentState!.validate()) return;
     if (_selectedChildId == null) {
-      setState(() => _errorMessage = 'Please select a child to assign this task.');
+      setState(() => _errorMessage = 'Please select a child for this activity.');
       return;
     }
 
@@ -130,6 +213,28 @@ class _ParentCreateTaskDialogState extends ConsumerState<ParentCreateTaskDialog>
     );
 
     final duration = int.tryParse(_durationController.text.trim()) ?? 30;
+
+    if (isEdit) {
+      final updated = widget.existingTask!.copyWith(
+        title: _titleController.text.trim(),
+        description: _descController.text.trim(),
+        targetMinutes: duration,
+        dueDate: _combinedDueDateTime,
+        proofRequirement: _selectedProof,
+        reward: _rewardController.text.trim().isNotEmpty
+            ? _rewardController.text.trim()
+            : null,
+      );
+
+      await ref
+          .read(parentDashboardControllerProvider.notifier)
+          .updateParentTask(updated);
+
+      if (!mounted) return;
+      setState(() => _isSubmitting = false);
+      Navigator.of(context).pop(true);
+      return;
+    }
 
     final success = await ref
         .read(parentDashboardControllerProvider.notifier)
@@ -152,7 +257,8 @@ class _ParentCreateTaskDialogState extends ConsumerState<ParentCreateTaskDialog>
       Navigator.of(context).pop(true);
     } else {
       setState(() {
-        _errorMessage = parentState.errorMessage ?? 'Failed to create task.';
+        _errorMessage = parentState.errorMessage ??
+            'Failed to save activity. Please check your connection and try again.';
       });
     }
   }
@@ -162,26 +268,26 @@ class _ParentCreateTaskDialogState extends ConsumerState<ParentCreateTaskDialog>
     final dateFormat = DateFormat('MMM d, yyyy');
 
     return AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.xxl)),
       title: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: AppTheme.parentPrimary.withAlpha((0.12 * 255).round()),
+              color: AppColors.parentPrimary.withAlpha((0.12 * 255).round()),
               shape: BoxShape.circle,
             ),
-            child: const Icon(
-              Icons.assignment_add,
-              color: AppTheme.parentPrimary,
+            child: Icon(
+              isEdit ? Icons.edit_note_rounded : Icons.add_task_rounded,
+              color: AppColors.parentPrimary,
               size: 22,
             ),
           ),
           const SizedBox(width: 12),
-          const Expanded(
+          Expanded(
             child: Text(
-              'Assign Activity',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              isEdit ? 'Edit Activity' : 'Assign Offline Activity',
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
             ),
           ),
         ],
@@ -200,21 +306,21 @@ class _ParentCreateTaskDialogState extends ConsumerState<ParentCreateTaskDialog>
                     padding: const EdgeInsets.all(10),
                     margin: const EdgeInsets.only(bottom: 12),
                     decoration: BoxDecoration(
-                      color: AppTheme.alertRed.withAlpha((0.15 * 255).round()),
-                      borderRadius: BorderRadius.circular(10),
+                      color: AppColors.errorRedLight,
+                      borderRadius: BorderRadius.circular(AppRadius.sm),
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.error_outline,
-                            color: AppTheme.alertRed, size: 18),
+                        const Icon(Icons.error_outline_rounded,
+                            color: AppColors.errorRed, size: 18),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             _errorMessage!,
                             style: const TextStyle(
-                              color: AppTheme.alertRed,
+                              color: AppColors.errorRed,
                               fontSize: 12,
-                              fontWeight: FontWeight.w600,
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
                         ),
@@ -223,76 +329,203 @@ class _ParentCreateTaskDialogState extends ConsumerState<ParentCreateTaskDialog>
                   ),
                 ],
 
-                // 1. Child Selection
-                if (widget.children.length > 1) ...[
-                  const Text(
-                    'Assign To',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                  ),
-                  const SizedBox(height: 6),
+                // Child Selection / Assignment Target
+                const Text(
+                  'Assigned Child',
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                ),
+                const SizedBox(height: 6),
+                if (widget.children.length > 1 && !isEdit) ...[
                   DropdownButtonFormField<String>(
                     initialValue: _selectedChildId,
                     decoration: InputDecoration(
                       contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 10),
+                          horizontal: 14, vertical: 12),
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(AppRadius.md),
                       ),
                     ),
                     items: widget.children.map((child) {
                       return DropdownMenuItem<String>(
                         value: child.id,
-                        child: Text(child.nickname),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.face_rounded,
+                                size: 18, color: AppColors.parentPrimary),
+                            const SizedBox(width: 8),
+                            Text(child.nickname,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w700)),
+                          ],
+                        ),
                       );
                     }).toList(),
                     onChanged: (val) => setState(() => _selectedChildId = val),
                   ),
+                ] else ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: AppColors.neutral100,
+                      borderRadius: BorderRadius.circular(AppRadius.md),
+                      border: Border.all(color: AppColors.neutralBorder),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.face_rounded,
+                            size: 20, color: AppColors.parentPrimary),
+                        const SizedBox(width: 10),
+                        Text(
+                          widget.children
+                                  .where((c) => c.id == _selectedChildId)
+                                  .map((c) => c.nickname)
+                                  .firstOrNull ??
+                              widget.children.firstOrNull?.nickname ??
+                              'Child',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                            color: AppColors.parentTextDark,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 14),
+
+                // Quick Activity Presets & AI Agent (only in create mode)
+                if (!isEdit) ...[
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Quick Inspiration',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                            color: AppColors.neutralMuted),
+                      ),
+                      TextButton.icon(
+                        icon: _isGeneratingAi
+                            ? const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.auto_awesome_rounded,
+                                size: 16, color: AppColors.parentPrimary),
+                        label: Text(
+                          _isGeneratingAi ? 'Thinking...' : '✨ AI Agent Ideas',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.parentPrimary,
+                          ),
+                        ),
+                        onPressed: _isGeneratingAi ? null : _generateAiSuggestions,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  if (_aiSuggestions.isNotEmpty) ...[
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      margin: const EdgeInsets.only(bottom: 10),
+                      decoration: BoxDecoration(
+                        color: AppColors.parentSecondary.withAlpha((0.08 * 255).round()),
+                        borderRadius: BorderRadius.circular(AppRadius.md),
+                        border: Border.all(
+                          color: AppColors.parentPrimary.withAlpha((0.2 * 255).round()),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Row(
+                            children: [
+                              Icon(Icons.psychology_rounded,
+                                  size: 16, color: AppColors.parentPrimary),
+                              SizedBox(width: 6),
+                              Text(
+                                'AI Agent Generated Recommendations (Tap to Fill)',
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.parentPrimary,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 6,
+                            children: _aiSuggestions.map((idea) {
+                              return ActionChip(
+                                avatar: const Icon(Icons.star_rounded,
+                                    size: 16, color: AppColors.warningOrange),
+                                label: Text(
+                                  '${idea.title} (${idea.targetMinutes}m)',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                backgroundColor: Colors.white,
+                                side: const BorderSide(color: AppColors.parentPrimary),
+                                onPressed: () => _applyAiIdea(idea),
+                              );
+                            }).toList(),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: _quickPresets.map((p) {
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8.0),
+                          child: ActionChip(
+                            avatar: Icon(p['icon'] as IconData,
+                                size: 16, color: AppColors.parentPrimary),
+                            label: Text(p['title'] as String,
+                                style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600)),
+                            backgroundColor: AppColors.neutral100,
+                            onPressed: () => _applyPreset(p),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
                   const SizedBox(height: 14),
                 ],
 
-                // 2. Title
-                const Text(
-                  'Task Title *',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                ),
-                const SizedBox(height: 6),
-                TextFormField(
+                // Title
+                AppTextField(
                   controller: _titleController,
-                  decoration: InputDecoration(
-                    hintText: 'e.g. Backyard Nature Walk, Reading Hour',
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 10),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
+                  label: 'Activity Title *',
+                  hint: 'e.g. Backyard Nature Walk, Reading Hour',
                   validator: (val) {
                     if (val == null || val.trim().isEmpty) {
-                      return 'Please enter a task title';
+                      return 'Please enter an activity title';
                     }
                     return null;
                   },
                 ),
                 const SizedBox(height: 14),
 
-                // 3. Description
-                const Text(
-                  'Description & Instructions *',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                ),
-                const SizedBox(height: 6),
-                TextFormField(
+                // Description
+                AppTextField(
                   controller: _descController,
+                  label: 'Instructions & Guidance *',
+                  hint: 'e.g. Spend 30 minutes reading a favorite book or playing outdoors.',
                   maxLines: 2,
-                  decoration: InputDecoration(
-                    hintText:
-                        'e.g. Spend 30 minutes reading a favorite book or playing outdoors.',
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 10),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
                   validator: (val) {
                     if (val == null || val.trim().isEmpty) {
                       return 'Please enter instructions for your child';
@@ -302,50 +535,38 @@ class _ParentCreateTaskDialogState extends ConsumerState<ParentCreateTaskDialog>
                 ),
                 const SizedBox(height: 14),
 
-                // 4. Duration (Minutes)
-                const Text(
-                  'Expected Duration (Minutes) *',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                ),
-                const SizedBox(height: 6),
-                TextFormField(
+                // Duration (Minutes)
+                AppTextField(
                   controller: _durationController,
+                  label: 'Expected Duration (Minutes) *',
+                  hint: '30',
                   keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    hintText: '30',
-                    suffixText: 'mins',
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 10),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
                   validator: (val) {
                     if (val == null || val.trim().isEmpty) {
                       return 'Enter duration in minutes';
                     }
                     final n = int.tryParse(val.trim());
                     if (n == null || n <= 0) {
-                      return 'Enter a positive number';
+                      return 'Enter a valid positive number';
                     }
                     return null;
                   },
                 ),
                 const SizedBox(height: 14),
 
-                // 6. Proof Requirement
+                // Proof Requirement
                 const Text(
                   'Proof Requirement',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
                 ),
                 const SizedBox(height: 6),
                 DropdownButtonFormField<ProofRequirement>(
                   initialValue: _selectedProof,
                   decoration: InputDecoration(
                     contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 10),
+                        horizontal: 14, vertical: 12),
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(AppRadius.md),
                     ),
                   ),
                   items: ProofRequirement.values.map((req) {
@@ -360,58 +581,51 @@ class _ParentCreateTaskDialogState extends ConsumerState<ParentCreateTaskDialog>
                 ),
                 const SizedBox(height: 14),
 
-                // 7. Optional Reward
-                const Text(
-                  'Associated Reward (Optional)',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                ),
-                const SizedBox(height: 6),
-                TextFormField(
+                // Optional Reward
+                AppTextField(
                   controller: _rewardController,
-                  decoration: InputDecoration(
-                    hintText: 'e.g. Family ice cream, Trip to the park',
-                    prefixIcon: const Icon(Icons.card_giftcard_rounded,
-                        color: AppTheme.warningOrange, size: 20),
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 10),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
+                  label: 'Associated Reward (Optional)',
+                  hint: 'e.g. Family ice cream, Trip to the park',
+                  prefixIcon: const Icon(Icons.card_giftcard_rounded,
+                      color: AppColors.warningOrange, size: 20),
                 ),
                 const SizedBox(height: 14),
 
-                // 8. Optional Due Date & Time
+                // Optional Due Date & Time
                 const Text(
                   'Due Date & Time (Optional)',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
                 ),
                 const SizedBox(height: 6),
                 InkWell(
                   onTap: _pickDueDate,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(AppRadius.md),
                   child: Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 12),
+                        horizontal: 14, vertical: 12),
                     decoration: BoxDecoration(
-                      border: Border.all(color: Colors.grey.shade400),
-                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.neutralBorder),
+                      borderRadius: BorderRadius.circular(AppRadius.md),
+                      color: Colors.white,
                     ),
                     child: Row(
                       children: [
                         const Icon(Icons.event_outlined,
-                            size: 20, color: AppTheme.parentPrimary),
+                            size: 20, color: AppColors.parentPrimary),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
                             _selectedDueDate != null
                                 ? '${dateFormat.format(_selectedDueDate!)} at ${_selectedDueTime?.format(context) ?? "End of day"}'
-                                : 'No due date set (tap to set)',
+                                : 'No due date set (tap to select)',
                             style: TextStyle(
                               color: _selectedDueDate != null
-                                  ? AppTheme.parentTextDark
-                                  : AppTheme.neutralMuted,
-                              fontSize: 13,
+                                  ? AppColors.parentTextDark
+                                  : AppColors.neutralMuted,
+                              fontSize: 13.5,
+                              fontWeight: _selectedDueDate != null
+                                  ? FontWeight.w600
+                                  : FontWeight.normal,
                             ),
                           ),
                         ),
@@ -436,26 +650,12 @@ class _ParentCreateTaskDialogState extends ConsumerState<ParentCreateTaskDialog>
           onPressed: _isSubmitting ? null : () => Navigator.of(context).pop(),
           child: const Text('Cancel'),
         ),
-        ElevatedButton.icon(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppTheme.parentPrimary,
-            foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-          onPressed: _isSubmitting ? null : _handleCreate,
-          icon: _isSubmitting
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                  ),
-                )
-              : const Icon(Icons.send_rounded, size: 18),
-          label: Text(_isSubmitting ? 'Assigning...' : 'Assign Activity'),
+        AppButton(
+          label: isEdit ? 'Save Changes' : 'Assign Activity',
+          icon: isEdit ? Icons.check_rounded : Icons.send_rounded,
+          isLoading: _isSubmitting,
+          size: AppButtonSize.md,
+          onPressed: _handleSave,
         ),
       ],
     );

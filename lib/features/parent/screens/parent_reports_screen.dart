@@ -6,6 +6,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/providers/providers.dart';
 import '../../../data/models/approved_report_model.dart';
 import '../../../data/models/child_profile_model.dart';
+import '../../family/widgets/family_selector_dropdown.dart';
 import '../../../services/analytics/report_request_service.dart';
 import '../controllers/parent_dashboard_controller.dart';
 
@@ -849,7 +850,7 @@ class _ParentReportsScreenState extends ConsumerState<ParentReportsScreen>
 
     if (children.isEmpty) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Approved Wellbeing Reports')),
+        appBar: AppBar(title: const FamilySelectorDropdown()),
         body: const Center(
           child: Padding(
             padding: EdgeInsets.all(32),
@@ -871,7 +872,7 @@ class _ParentReportsScreenState extends ConsumerState<ParentReportsScreen>
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Approved Wellbeing Reports'),
+        title: const FamilySelectorDropdown(),
         actions: [
           IconButton(
             icon: const Icon(Icons.notification_add_outlined),

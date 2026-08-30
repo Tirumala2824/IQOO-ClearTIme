@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/providers/providers.dart';
-import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_radius.dart';
+import '../../../core/widgets/app_card.dart';
 import '../../../data/models/achievement_model.dart';
 import '../../../data/models/usage_models.dart';
 import '../controllers/child_achievements_controller.dart';
@@ -52,16 +54,15 @@ class _ChildProgressScreenState extends ConsumerState<ChildProgressScreen> {
     final history = childState.coachingHistory;
 
     return Scaffold(
-      backgroundColor: AppTheme.childSurface,
+      backgroundColor: AppColors.childSurface,
       appBar: AppBar(
-        backgroundColor: AppTheme.childSurface,
-        elevation: 0,
+        backgroundColor: AppColors.childSurface,
         title: const Text(
-          'My Progress & Badges 🏆',
+          'My Progress & Badges',
           style: TextStyle(
             fontWeight: FontWeight.w800,
-            fontSize: 22,
-            color: AppTheme.childTextDark,
+            fontSize: 20,
+            color: AppColors.childTextDark,
           ),
         ),
       ),
@@ -75,19 +76,19 @@ class _ChildProgressScreenState extends ConsumerState<ChildProgressScreen> {
         child: ListView(
           padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
           children: [
-            // ─── 1. REAL STATS SUMMARY ───
+            // 1. Stats Summary Hero Card
             Container(
               padding: const EdgeInsets.all(22),
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
-                  colors: [AppTheme.childPrimary, AppTheme.childSecondary],
+                  colors: [AppColors.childPrimary, AppColors.childSecondary],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
-                borderRadius: BorderRadius.circular(24),
+                borderRadius: BorderRadius.circular(AppRadius.xl),
                 boxShadow: [
                   BoxShadow(
-                    color: AppTheme.childPrimary.withAlpha((0.25 * 255).round()),
+                    color: AppColors.childPrimary.withAlpha((0.25 * 255).round()),
                     blurRadius: 16,
                     offset: const Offset(0, 8),
                   ),
@@ -99,7 +100,7 @@ class _ChildProgressScreenState extends ConsumerState<ChildProgressScreen> {
                   Column(
                     children: [
                       const Icon(Icons.task_alt_rounded,
-                          color: AppTheme.childAccent, size: 34),
+                          color: AppColors.childAccent, size: 32),
                       const SizedBox(height: 4),
                       Text(
                         '${missionsState.completedCount}',
@@ -110,20 +111,20 @@ class _ChildProgressScreenState extends ConsumerState<ChildProgressScreen> {
                         ),
                       ),
                       const Text(
-                        'Finished Activities',
-                        style: TextStyle(color: Colors.white70, fontSize: 11),
+                        'Activities Done',
+                        style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w600),
                       ),
                     ],
                   ),
                   Container(
                     width: 1,
-                    height: 46,
+                    height: 44,
                     color: Colors.white.withAlpha((0.3 * 255).round()),
                   ),
                   Column(
                     children: [
                       const Icon(Icons.local_fire_department_rounded,
-                          color: AppTheme.warningOrange, size: 34),
+                          color: AppColors.warningOrange, size: 32),
                       const SizedBox(height: 4),
                       Text(
                         '${history.streakDays} ${history.streakDays == 1 ? "Day" : "Days"}',
@@ -134,20 +135,20 @@ class _ChildProgressScreenState extends ConsumerState<ChildProgressScreen> {
                         ),
                       ),
                       const Text(
-                        'Coaching Streak',
-                        style: TextStyle(color: Colors.white70, fontSize: 11),
+                        'Active Streak',
+                        style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w600),
                       ),
                     ],
                   ),
                   Container(
                     width: 1,
-                    height: 46,
+                    height: 44,
                     color: Colors.white.withAlpha((0.3 * 255).round()),
                   ),
                   Column(
                     children: [
                       const Icon(Icons.verified_rounded,
-                          color: Colors.white, size: 34),
+                          color: Colors.white, size: 32),
                       const SizedBox(height: 4),
                       Text(
                         '${history.goalsCompleted}',
@@ -158,8 +159,8 @@ class _ChildProgressScreenState extends ConsumerState<ChildProgressScreen> {
                         ),
                       ),
                       const Text(
-                        'Goals Done',
-                        style: TextStyle(color: Colors.white70, fontSize: 11),
+                        'Goals Reached',
+                        style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w600),
                       ),
                     ],
                   ),
@@ -167,23 +168,10 @@ class _ChildProgressScreenState extends ConsumerState<ChildProgressScreen> {
               ),
             ),
 
-            const SizedBox(height: 24),
+            const SizedBox(height: 18),
 
-            // ─── 2. REAL 7-DAY USAGE TREND ───
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(22),
-                border: Border.all(color: AppTheme.neutralBorder),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withAlpha((0.02 * 255).round()),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
+            // 2. Real 7-Day Activity Trend
+            AppCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -193,16 +181,16 @@ class _ChildProgressScreenState extends ConsumerState<ChildProgressScreen> {
                       const Text(
                         '7-Day Activity Trend',
                         style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                          color: AppTheme.childTextDark,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 15,
+                          color: AppColors.childTextDark,
                         ),
                       ),
                       Row(
                         children: [
-                          _buildLegendDot(AppTheme.childSecondary, 'Focus'),
+                          _buildLegendDot(AppColors.childSecondary, 'Focus'),
                           const SizedBox(width: 10),
-                          _buildLegendDot(AppTheme.childPrimary, 'Screen'),
+                          _buildLegendDot(AppColors.childPrimary, 'Screen'),
                         ],
                       ),
                     ],
@@ -214,7 +202,7 @@ class _ChildProgressScreenState extends ConsumerState<ChildProgressScreen> {
                       if (snapshot.connectionState == ConnectionState.waiting) {
                         return const SizedBox(
                           height: 110,
-                          child: Center(child: CircularProgressIndicator()),
+                          child: Center(child: CircularProgressIndicator(strokeWidth: 2.5)),
                         );
                       }
                       final dailyList = snapshot.data ?? [];
@@ -223,14 +211,14 @@ class _ChildProgressScreenState extends ConsumerState<ChildProgressScreen> {
 
                       if (dailyList.isEmpty || totalWeekMinutes == 0) {
                         return const SizedBox(
-                          height: 100,
+                          height: 90,
                           child: Center(
                             child: Text(
                               'No activity recorded yet across this week.\nYour daily trend will appear here as you use your device!',
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 fontSize: 12,
-                                color: AppTheme.neutralMuted,
+                                color: AppColors.neutralMuted,
                               ),
                             ),
                           ),
@@ -244,31 +232,31 @@ class _ChildProgressScreenState extends ConsumerState<ChildProgressScreen> {
               ),
             ),
 
-            const SizedBox(height: 24),
+            const SizedBox(height: 18),
 
-            // ─── 3. REAL WELLBEING BADGES ───
+            // 3. Wellbeing Badges
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text(
-                  'Wellbeing Badges',
+                  'Wellbeing Badges 🏆',
                   style: TextStyle(
                     fontWeight: FontWeight.w800,
-                    fontSize: 18,
-                    color: AppTheme.childTextDark,
+                    fontSize: 16,
+                    color: AppColors.childTextDark,
                   ),
                 ),
                 Text(
                   '${achState.unlockedCount} of ${achState.achievements.length} unlocked',
                   style: const TextStyle(
-                    color: AppTheme.neutralMuted,
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
+                    color: AppColors.neutralMuted,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
 
             if (achState.isLoading)
               const Center(
@@ -283,7 +271,7 @@ class _ChildProgressScreenState extends ConsumerState<ChildProgressScreen> {
                   padding: EdgeInsets.all(24.0),
                   child: Text(
                     'No badges available yet.',
-                    style: TextStyle(color: AppTheme.neutralMuted),
+                    style: TextStyle(color: AppColors.neutralMuted),
                   ),
                 ),
               )
@@ -295,7 +283,7 @@ class _ChildProgressScreenState extends ConsumerState<ChildProgressScreen> {
                   crossAxisCount: 2,
                   crossAxisSpacing: 12,
                   mainAxisSpacing: 12,
-                  childAspectRatio: 0.88,
+                  childAspectRatio: 0.9,
                 ),
                 itemCount: achState.achievements.length,
                 itemBuilder: (context, index) {
@@ -303,7 +291,7 @@ class _ChildProgressScreenState extends ConsumerState<ChildProgressScreen> {
                   return _buildAchievementCard(ach);
                 },
               ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
           ],
         ),
       ),
@@ -322,7 +310,7 @@ class _ChildProgressScreenState extends ConsumerState<ChildProgressScreen> {
         const SizedBox(width: 4),
         Text(
           label,
-          style: const TextStyle(fontSize: 11, color: AppTheme.neutralMuted),
+          style: const TextStyle(fontSize: 11, color: AppColors.neutralMuted, fontWeight: FontWeight.w600),
         ),
       ],
     );
@@ -331,7 +319,6 @@ class _ChildProgressScreenState extends ConsumerState<ChildProgressScreen> {
   Widget _buildDynamic7DayChart(List<DailyUsage> dailyList) {
     final dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-    // Find max value to scale chart proportionally
     int maxVal = 60;
     for (final d in dailyList) {
       if (d.totalMinutes > maxVal) maxVal = d.totalMinutes;
@@ -357,8 +344,8 @@ class _ChildProgressScreenState extends ConsumerState<ChildProgressScreen> {
                     width: 10,
                     height: totalHeight,
                     decoration: BoxDecoration(
-                      color: AppTheme.childPrimary.withAlpha((0.35 * 255).round()),
-                      borderRadius: BorderRadius.circular(4),
+                      color: AppColors.childPrimary.withAlpha((0.35 * 255).round()),
+                      borderRadius: BorderRadius.circular(AppRadius.xs),
                     ),
                   ),
                   const SizedBox(width: 3),
@@ -366,8 +353,8 @@ class _ChildProgressScreenState extends ConsumerState<ChildProgressScreen> {
                     width: 10,
                     height: focusHeight,
                     decoration: BoxDecoration(
-                      color: AppTheme.childSecondary,
-                      borderRadius: BorderRadius.circular(4),
+                      color: AppColors.childSecondary,
+                      borderRadius: BorderRadius.circular(AppRadius.xs),
                     ),
                   ),
                 ],
@@ -376,8 +363,8 @@ class _ChildProgressScreenState extends ConsumerState<ChildProgressScreen> {
               Text(
                 dayLabel,
                 style: const TextStyle(
-                  fontSize: 10.5,
-                  color: AppTheme.neutralMuted,
+                  fontSize: 11,
+                  color: AppColors.neutralMuted,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -391,35 +378,30 @@ class _ChildProgressScreenState extends ConsumerState<ChildProgressScreen> {
   Widget _buildAchievementCard(ChildAchievement ach) {
     final isUnlocked = ach.isUnlocked;
 
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: isUnlocked ? Colors.white : AppTheme.neutralBg,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isUnlocked
-              ? AppTheme.childAccent.withAlpha((0.7 * 255).round())
-              : AppTheme.neutralBorder,
-          width: isUnlocked ? 1.5 : 1.0,
-        ),
-      ),
+    return AppCard(
+      padding: const EdgeInsets.all(12),
+      borderColor: isUnlocked
+          ? AppColors.childAccent.withAlpha((0.6 * 255).round())
+          : AppColors.neutralBorder,
+      borderWidth: isUnlocked ? 1.5 : 1.0,
+      backgroundColor: isUnlocked ? Colors.white : AppColors.neutral50,
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Container(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
               color: isUnlocked
-                  ? AppTheme.childAccent.withAlpha((0.15 * 255).round())
-                  : Colors.grey.withAlpha((0.1 * 255).round()),
+                  ? AppColors.childAccent.withAlpha((0.15 * 255).round())
+                  : AppColors.neutral200,
               shape: BoxShape.circle,
             ),
             child: Icon(
               isUnlocked
                   ? Icons.emoji_events_rounded
                   : Icons.lock_outline_rounded,
-              color: isUnlocked ? AppTheme.childAccent : AppTheme.neutralMuted,
-              size: 28,
+              color: isUnlocked ? AppColors.childAccent : AppColors.neutralMuted,
+              size: 26,
             ),
           ),
           const SizedBox(height: 8),
@@ -427,39 +409,39 @@ class _ChildProgressScreenState extends ConsumerState<ChildProgressScreen> {
             ach.title,
             textAlign: TextAlign.center,
             style: TextStyle(
-              fontWeight: FontWeight.bold,
+              fontWeight: FontWeight.w800,
               fontSize: 13,
-              color: isUnlocked ? AppTheme.childTextDark : AppTheme.neutralMuted,
+              color: isUnlocked ? AppColors.childTextDark : AppColors.neutralMuted,
             ),
           ),
-          const SizedBox(height: 3),
+          const SizedBox(height: 2),
           Text(
             ach.description,
             textAlign: TextAlign.center,
             style: const TextStyle(
-              fontSize: 10.5,
-              color: AppTheme.neutralMuted,
+              fontSize: 11,
+              color: AppColors.neutralMuted,
             ),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 6),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
             decoration: BoxDecoration(
               color: isUnlocked
-                  ? AppTheme.childSecondary.withAlpha((0.15 * 255).round())
-                  : Colors.grey.withAlpha((0.15 * 255).round()),
-              borderRadius: BorderRadius.circular(8),
+                  ? AppColors.childSecondary.withAlpha((0.15 * 255).round())
+                  : AppColors.neutral200,
+              borderRadius: BorderRadius.circular(AppRadius.xs),
             ),
             child: Text(
               isUnlocked ? 'Unlocked ✓' : 'Locked',
               style: TextStyle(
-                fontSize: 10,
+                fontSize: 10.5,
                 fontWeight: FontWeight.bold,
                 color: isUnlocked
-                    ? AppTheme.childSecondary
-                    : AppTheme.neutralMuted,
+                    ? AppColors.childSecondary
+                    : AppColors.neutralMuted,
               ),
             ),
           ),
