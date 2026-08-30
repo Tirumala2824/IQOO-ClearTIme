@@ -22,6 +22,46 @@ class ChildReportBuilder {
     this.configVersion = '1.0.0',
   }) : _privacyFilter = privacyFilter;
 
+  /// Builds a snapshot directly from already-computed aggregate [facts] and
+  /// Understand → Act sections. Used for parent-report-request generation.
+  ApprovedReport buildApprovedSnapshot({
+    required String childId,
+    required String childNickname,
+    required String familyId,
+    required ReportPeriod period,
+    required DateTime periodStart,
+    required DateTime periodEnd,
+    required ReportFacts facts,
+    Map<String, dynamic> understandActSections = const {},
+  }) {
+    final reportId =
+        'rep-$childId-${period.name}-${periodStart.year}${periodStart.month.toString().padLeft(2, '0')}${periodStart.day.toString().padLeft(2, '0')}';
+    return ApprovedReport(
+      id: reportId,
+      childId: childId,
+      childNickname: childNickname,
+      familyId: familyId,
+      period: period,
+      periodStart: periodStart,
+      periodEnd: periodEnd,
+      detailLevel: ReportDetailLevel.summary,
+      facts: facts,
+      summaryText: _generateDeterministicSummary(
+        period: period,
+        childNickname: childNickname,
+        facts: facts,
+        categories: const {},
+      ),
+      understandActSections: understandActSections,
+      contextVersion: contextVersion,
+      privacyFilterVersion: _privacyFilter.version,
+      analyticsVersion: analyticsVersion,
+      configVersion: configVersion,
+      createdAt: DateTime.now(),
+      isSnapshot: true,
+    );
+  }
+
   /// Builds a deterministic Daily Approved Report.
   ApprovedReport buildDailyReport({
     required String childId,

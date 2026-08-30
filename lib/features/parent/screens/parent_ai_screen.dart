@@ -5,7 +5,6 @@ import '../../../core/constants/app_routes.dart';
 import '../../../core/providers/providers.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/approved_report_model.dart';
-import '../../../data/models/child_profile_model.dart';
 import '../../../services/llm/parent_ai_service.dart';
 import '../controllers/parent_dashboard_controller.dart';
 
@@ -46,10 +45,11 @@ class _ParentAiScreenState extends ConsumerState<ParentAiScreen> {
   Future<void> _loadConversation() async {
     final convoRepo = ref.read(parentConversationRepositoryProvider);
     final parentState = ref.read(parentDashboardControllerProvider);
-    final childId = _selectedChildId ??
-        (parentState.children.isNotEmpty
-            ? parentState.children.first.id
-            : 'child-1');
+    if (parentState.children.isEmpty) {
+      setState(() => _activeConversation = null);
+      return;
+    }
+    final childId = _selectedChildId ?? parentState.children.first.id;
 
     final conversations = await convoRepo.getConversations(childId);
     if (conversations.isNotEmpty) {
@@ -123,15 +123,30 @@ class _ParentAiScreenState extends ConsumerState<ParentAiScreen> {
 
       final reports =
           await reportRepo.getApprovedReports(_activeConversation!.childId);
-      final attachedReport = _selectedReportId != null
-          ? reports.firstWhere((r) => r.id == _selectedReportId,
-              orElse: () => reports.isNotEmpty ? reports.first : _dummyReport())
-          : (reports.isNotEmpty ? reports.first : _dummyReport());
 
-      final reply = await parentService.askAboutApprovedReport(
-        report: attachedReport,
-        query: query.trim(),
-      );
+      late ParentChatMessage reply;
+      if (reports.isEmpty) {
+        reply = ParentChatMessage(
+          id: 'no-report-${DateTime.now().millisecondsSinceEpoch}',
+          text:
+              'There is no approved report for this child yet. I can only '
+              'answer from real, approved report facts — I do not invent '
+              'usage numbers. Ask again once a report snapshot is available.',
+          isUser: false,
+          timestamp: DateTime.now(),
+          isMissingDataNotice: true,
+        );
+      } else {
+        final attachedReport = _selectedReportId != null
+            ? reports.firstWhere((r) => r.id == _selectedReportId,
+                orElse: () => reports.first)
+            : reports.first;
+
+        reply = await parentService.askAboutApprovedReport(
+          report: attachedReport,
+          query: query.trim(),
+        );
+      }
 
       final convoWithAi = _activeConversation!.copyWith(
         messages: [..._activeConversation!.messages, reply],
@@ -152,9 +167,12 @@ class _ParentAiScreenState extends ConsumerState<ParentAiScreen> {
       final fallbackMsg = ParentChatMessage(
         id: 'fallback-${DateTime.now().millisecondsSinceEpoch}',
         text:
-            'Report Summary: Total recorded screen time remains steady within family boundaries. Keep encouraging regular 5-minute movement pauses.',
+            'The local AI is unavailable right now, so I cannot generate an '
+            'answer. No fabricated summary was created. Please try again '
+            'later.',
         isUser: false,
         timestamp: DateTime.now(),
+        isMissingDataNotice: true,
       );
 
       final convoWithFallback = _activeConversation!.copyWith(
@@ -175,30 +193,11 @@ class _ParentAiScreenState extends ConsumerState<ParentAiScreen> {
     }
   }
 
-  ApprovedReport _dummyReport() {
-    return ApprovedReport(
-      id: 'rep-default',
-      childId: _selectedChildId ?? 'child-1',
-      childNickname: 'Child',
-      familyId: 'family-1',
-      period: ReportPeriod.weekly,
-      periodStart: DateTime.now().subtract(const Duration(days: 7)),
-      periodEnd: DateTime.now(),
-      facts: const ReportFacts(
-        totalScreenMinutes: 872,
-        focusMinutes: 370,
-        breakCount: 22,
-        goalsCompletedCount: 5,
-        goalsTotalCount: 7,
-      ),
-      summaryText: 'Factual weekly aggregate summary.',
-      createdAt: DateTime.now(),
-    );
-  }
-
   Future<void> _startNewConversation() async {
     final convoRepo = ref.read(parentConversationRepositoryProvider);
-    final childId = _selectedChildId ?? 'child-1';
+    final parentState = ref.read(parentDashboardControllerProvider);
+    if (parentState.children.isEmpty) return;
+    final childId = _selectedChildId ?? parentState.children.first.id;
     final now = DateTime.now();
 
     final newConvo = ParentAIConversation(
@@ -233,7 +232,9 @@ class _ParentAiScreenState extends ConsumerState<ParentAiScreen> {
 
   Future<void> _deleteAllConversations() async {
     final convoRepo = ref.read(parentConversationRepositoryProvider);
-    final childId = _selectedChildId ?? 'child-1';
+    final parentState = ref.read(parentDashboardControllerProvider);
+    if (parentState.children.isEmpty) return;
+    final childId = _selectedChildId ?? parentState.children.first.id;
     await convoRepo.deleteAllConversations(childId);
     await _loadConversation();
     if (mounted) {
@@ -252,18 +253,26 @@ class _ParentAiScreenState extends ConsumerState<ParentAiScreen> {
     final reportRepo = ref.watch(approvedReportRepositoryProvider);
 
     final children = parentState.children;
-    final activeChild = children.firstWhere(
-      (c) => c.id == _selectedChildId,
-      orElse: () => children.isNotEmpty
-          ? children.first
-          : ChildProfile(
-              id: 'child-1',
-              nickname: 'Alex',
-              age: 12,
-              createdAt: DateTime.now(),
-              updatedAt: DateTime.now(),
+    final activeChild = children.where((c) => c.id == _selectedChildId).isEmpty
+        ? (children.isNotEmpty ? children.first : null)
+        : children.firstWhere((c) => c.id == _selectedChildId);
+
+    if (activeChild == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Parent AI Assistant')),
+        body: const Center(
+          child: Padding(
+            padding: EdgeInsets.all(32),
+            child: Text(
+              'No children linked to this family yet. The AI assistant '
+              'needs an approved report from a real child before it can '
+              'answer questions.',
+              textAlign: TextAlign.center,
             ),
-    );
+          ),
+        ),
+      );
+    }
 
     final messages = _activeConversation?.messages ?? [];
 
@@ -369,17 +378,7 @@ class _ParentAiScreenState extends ConsumerState<ParentAiScreen> {
                   value: activeChild.id,
                   underline: const SizedBox(),
                   icon: const Icon(Icons.arrow_drop_down_rounded, size: 18),
-                  items: (children.isNotEmpty
-                          ? children
-                          : [
-                              ChildProfile(
-                                  id: 'child-1',
-                                  nickname: 'Alex',
-                                  age: 12,
-                                  createdAt: DateTime.now(),
-                                  updatedAt: DateTime.now())
-                            ])
-                      .map((c) {
+                  items: children.map((c) {
                     return DropdownMenuItem<String>(
                       value: c.id,
                       child: Text(

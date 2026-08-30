@@ -6,6 +6,8 @@ import '../../../core/constants/app_routes.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/security/secure_token_generator.dart';
+import '../../../core/providers/providers.dart';
+import '../../../data/models/user_profile_model.dart';
 import '../../authentication/controllers/auth_controller.dart';
 import '../../child/controllers/child_dashboard_controller.dart';
 import '../controllers/invitation_controller.dart';
@@ -45,8 +47,31 @@ class _JoinFamilyScreenState extends ConsumerState<JoinFamilyScreen> {
   Future<void> _handleRedeem() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final user = ref.read(authControllerProvider).user;
-    if (user == null) return;
+    var user = ref.read(authControllerProvider).user;
+    if (user == null) {
+      final currentAuthUser = ref.read(authRepositoryProvider).currentAuthUser;
+      if (currentAuthUser != null) {
+        user = await ref.read(authRepositoryProvider).getCurrentUserProfile();
+        user ??= await ref.read(authRepositoryProvider).registerProfile(
+              userId: currentAuthUser.id,
+              role: UserRole.child,
+              displayName: _nicknameController.text.trim(),
+            );
+        await ref.read(authControllerProvider.notifier).setUserProfile(user);
+      }
+    }
+
+    if (user == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please sign in or verify your account before joining.'),
+            backgroundColor: AppTheme.errorRed,
+          ),
+        );
+      }
+      return;
+    }
 
     final code = _codeController.text.trim();
     final nickname = _nicknameController.text.trim();
@@ -66,7 +91,23 @@ class _JoinFamilyScreenState extends ConsumerState<JoinFamilyScreen> {
           .read(childDashboardControllerProvider.notifier)
           .loadDashboard(user.id);
       if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Welcome to the family, $nickname! 🎉'),
+            backgroundColor: AppTheme.successGreen,
+          ),
+        );
         context.go(AppRoutes.child);
+      }
+    } else if (mounted) {
+      final error = ref.read(invitationControllerProvider).errorMessage;
+      if (error != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(error),
+            backgroundColor: AppTheme.errorRed,
+          ),
+        );
       }
     }
   }
@@ -113,16 +154,26 @@ class _JoinFamilyScreenState extends ConsumerState<JoinFamilyScreen> {
                           onDetect: (capture) {
                             final List<Barcode> barcodes = capture.barcodes;
                             for (final barcode in barcodes) {
-                              if (barcode.rawValue != null) {
+                              if (barcode.rawValue != null &&
+                                  barcode.rawValue!.isNotEmpty) {
                                 final parsed =
                                     SecureTokenGenerator.parseInvitationCode(
                                   barcode.rawValue!,
                                 );
-                                setState(() {
-                                  _codeController.text = parsed;
-                                  _isScannerOpen = false;
-                                });
-                                break;
+                                if (parsed.isNotEmpty) {
+                                  setState(() {
+                                    _codeController.text = parsed;
+                                    _isScannerOpen = false;
+                                  });
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('QR Code scanned: $parsed 🎉'),
+                                      backgroundColor: AppTheme.childSecondary,
+                                      duration: const Duration(seconds: 2),
+                                    ),
+                                  );
+                                  break;
+                                }
                               }
                             }
                           },
@@ -225,38 +276,6 @@ class _JoinFamilyScreenState extends ConsumerState<JoinFamilyScreen> {
                   ],
                 ),
                 const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: ActionChip(
-                    avatar: const Icon(Icons.flash_on_rounded,
-                        size: 16, color: AppTheme.childPrimary),
-                    label: const Text(
-                      'Fill Test Code (TEST2026)',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: AppTheme.childPrimary,
-                      ),
-                    ),
-                    backgroundColor:
-                        AppTheme.childPrimary.withAlpha((0.08 * 255).round()),
-                    side: BorderSide(
-                      color:
-                          AppTheme.childPrimary.withAlpha((0.2 * 255).round()),
-                    ),
-                    onPressed: () {
-                      setState(() {
-                        _codeController.text = 'TEST2026';
-                        if (_nicknameController.text.trim().isEmpty) {
-                          _nicknameController.text = 'Leo';
-                        }
-                        if (_ageController.text.trim().isEmpty) {
-                          _ageController.text = '11';
-                        }
-                      });
-                    },
-                  ),
-                ),
                 const SizedBox(height: 12),
 
                 TextFormField(

@@ -1,4 +1,5 @@
 import '../models/achievement_model.dart';
+import '../../services/storage/encrypted_device_store.dart';
 
 abstract class LocalAchievementRepository {
   Future<List<ChildAchievement>> getAchievements();
@@ -7,111 +8,74 @@ abstract class LocalAchievementRepository {
   Future<void> updateAchievementProgress(String id, int value, bool unlock);
 }
 
-class InMemoryLocalAchievementRepository implements LocalAchievementRepository {
-  final Map<String, ChildAchievement> _achievements = {};
+/// Encrypted on-device achievement state.
+///
+/// The repository starts empty: no badges are pre-seeded. An achievement
+/// record exists only after it was computed from real usage analytics.
+class EncryptedLocalAchievementRepository
+    implements LocalAchievementRepository {
+  final EncryptedDeviceStore _store;
 
-  InMemoryLocalAchievementRepository() {
-    _initDefaultAchievements();
-  }
-
-  void _initDefaultAchievements() {
-    final defaults = [
-      const ChildAchievement(
-        id: 'ach-focus-starter',
-        title: 'Focus Starter',
-        description: 'Complete your first 20-minute uninterrupted focus quest.',
-        icon: 'bolt_rounded',
-        type: AchievementType.focusStarter,
-        isUnlocked: false,
-        progress: 0.0,
-        requirementValue: 20,
-        currentValue: 0,
-        requirementLabel: '0 / 20 min focus',
-      ),
-      const ChildAchievement(
-        id: 'ach-break-master',
-        title: 'Break Master',
-        description: 'Take 5 mindful screen breaks across a single day.',
-        icon: 'self_improvement_rounded',
-        type: AchievementType.breakMaster,
-        isUnlocked: false,
-        progress: 0.0,
-        requirementValue: 5,
-        currentValue: 0,
-        requirementLabel: '0 / 5 mindful breaks',
-      ),
-      const ChildAchievement(
-        id: 'ach-deep-focus',
-        title: 'Deep Focus Sprint',
-        description: 'Complete a qualifying uninterrupted 30-minute deep focus session.',
-        icon: 'psychology_rounded',
-        type: AchievementType.deepFocus,
-        isUnlocked: false,
-        progress: 0.0,
-        requirementValue: 30,
-        currentValue: 0,
-        requirementLabel: '0 / 30 min session',
-      ),
-      const ChildAchievement(
-        id: 'ach-7-day-balance',
-        title: '7-Day Balance',
-        description: 'Maintain balanced screen habits and meet daily focus goals for 7 days.',
-        icon: 'calendar_month_rounded',
-        type: AchievementType.sevenDayBalance,
-        isUnlocked: false,
-        progress: 0.0,
-        requirementValue: 7,
-        currentValue: 0,
-        requirementLabel: '0 / 7 days',
-      ),
-      const ChildAchievement(
-        id: 'ach-consistency-champ',
-        title: 'Consistency Champion',
-        description: 'Achieve your focus goals 14 days in a row.',
-        icon: 'military_tech_rounded',
-        type: AchievementType.consistencyChampion,
-        isUnlocked: false,
-        progress: 0.0,
-        requirementValue: 14,
-        currentValue: 0,
-        requirementLabel: '0 / 14 days',
-      ),
-    ];
-
-    for (final a in defaults) {
-      _achievements[a.id] = a;
-    }
-  }
+  EncryptedLocalAchievementRepository({required EncryptedDeviceStore store})
+      : _store = store;
 
   @override
   Future<List<ChildAchievement>> getAchievements() async {
-    return _achievements.values.toList();
+    final jsons = await _store.getAllJson(
+      EncryptedDeviceStore.goalsBox,
+      onCorrupt: (key, _) => _store.delete(EncryptedDeviceStore.goalsBox, key),
+    );
+    final achievements = <ChildAchievement>[];
+    for (final json in jsons) {
+      try {
+        final achievement = ChildAchievement.fromJson(json);
+        if (achievement.id.startsWith('ach-')) {
+          achievements.add(achievement);
+        }
+      } catch (_) {
+        // Skip corrupted entries.
+      }
+    }
+    achievements.sort((a, b) => b.id.compareTo(b.id));
+    return achievements;
   }
 
   @override
   Future<ChildAchievement?> getAchievementById(String id) async {
-    return _achievements[id];
+    final json = await _store.getJson(EncryptedDeviceStore.goalsBox, id);
+    if (json == null) return null;
+    try {
+      return ChildAchievement.fromJson(json);
+    } catch (_) {
+      return null;
+    }
   }
 
   @override
   Future<void> saveAchievement(ChildAchievement achievement) async {
-    _achievements[achievement.id] = achievement;
+    await _store.putJson(
+      EncryptedDeviceStore.goalsBox,
+      achievement.id,
+      achievement.toJson(),
+    );
   }
 
   @override
   Future<void> updateAchievementProgress(String id, int value, bool unlock) async {
-    final existing = _achievements[id];
+    final existing = await getAchievementById(id);
     if (existing == null) return;
 
     final progressRatio = existing.requirementValue > 0
         ? (value / existing.requirementValue).clamp(0.0, 1.0)
         : (unlock ? 1.0 : 0.0);
 
-    _achievements[id] = existing.copyWith(
+    await saveAchievement(existing.copyWith(
       currentValue: value,
       progress: progressRatio,
       isUnlocked: unlock || progressRatio >= 1.0,
-      unlockedAt: (unlock || progressRatio >= 1.0) ? (existing.unlockedAt ?? DateTime.now()) : null,
-    );
+      unlockedAt: (unlock || progressRatio >= 1.0)
+          ? (existing.unlockedAt ?? DateTime.now())
+          : null,
+    ));
   }
 }

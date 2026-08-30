@@ -1,4 +1,5 @@
 import '../models/goal_model.dart';
+import '../../services/storage/encrypted_device_store.dart';
 
 abstract class LocalGoalRepository {
   Future<List<ChildGoal>> getGoals();
@@ -9,121 +10,114 @@ abstract class LocalGoalRepository {
   Future<void> deleteGoal(String id);
   Future<ChildGoal?> getActiveAIGoal();
   Future<List<ChildGoal>> getGoalHistory();
+  Future<bool> hasActiveAIGoalForToday(GoalType type);
 }
 
-class InMemoryLocalGoalRepository implements LocalGoalRepository {
-  final Map<String, ChildGoal> _goals = {};
+/// Encrypted on-device persistence for private child goals.
+///
+/// Goals never sync to Supabase; they exist only inside the encrypted store
+/// and are generated solely from real usage aggregates.
+class EncryptedLocalGoalRepository implements LocalGoalRepository {
+  final EncryptedDeviceStore _store;
 
-  InMemoryLocalGoalRepository({bool seedAiHistory = false}) {
-    _initDefaultGoals(seedAiHistory: seedAiHistory);
-  }
-
-  void _initDefaultGoals({bool seedAiHistory = false}) {
-    final now = DateTime.now();
-
-    // User-created goals (existing defaults)
-    final userGoals = [
-      ChildGoal(
-        id: 'g-daily-focus',
-        title: 'Daily Focus Goal',
-        description: 'Achieve at least 60 minutes of undistracted learning each day.',
-        type: GoalType.dailyFocus,
-        targetMinutes: 60,
-        currentMinutes: 0,
-        status: GoalStatus.active,
-        source: GoalSource.userCreated,
-        createdAt: now.subtract(const Duration(days: 3)),
-      ),
-      ChildGoal(
-        id: 'g-break-goal',
-        title: 'Mindful Break Habit',
-        description: 'Take at least 4 mindful screen breaks today.',
-        type: GoalType.breakGoal,
-        targetMinutes: 4,
-        currentMinutes: 0,
-        status: GoalStatus.active,
-        source: GoalSource.userCreated,
-        createdAt: now.subtract(const Duration(days: 2)),
-      ),
-      ChildGoal(
-        id: 'g-weekly-focus',
-        title: 'Weekly Learning Target',
-        description: 'Reach 350 minutes of creative and educational app time this week.',
-        type: GoalType.weeklyFocus,
-        targetMinutes: 350,
-        currentMinutes: 0,
-        status: GoalStatus.active,
-        source: GoalSource.userCreated,
-        createdAt: now.subtract(const Duration(days: 5)),
-      ),
-      ChildGoal(
-        id: 'g-balance-goal',
-        title: 'Digital Balance',
-        description: 'Keep recreational gaming under 60 minutes daily.',
-        type: GoalType.digitalBalance,
-        targetMinutes: 60,
-        currentMinutes: 0,
-        status: GoalStatus.active,
-        source: GoalSource.userCreated,
-        createdAt: now,
-      ),
-    ];
-
-    for (final g in userGoals) {
-      _goals[g.id] = g;
-    }
-  }
+  EncryptedLocalGoalRepository({required EncryptedDeviceStore store})
+      : _store = store;
 
   @override
   Future<List<ChildGoal>> getGoals() async {
-    return _goals.values.toList()
-      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    final jsons = await _store.getAllJson(
+      EncryptedDeviceStore.goalsBox,
+      onCorrupt: (key, _) => deleteGoal(key),
+    );
+    final goals = <ChildGoal>[];
+    for (final json in jsons) {
+      try {
+        goals.add(ChildGoal.fromJson(json));
+      } catch (_) {
+        // Skip corrupted entries; they are surfaced as an empty result.
+      }
+    }
+    // Retire goals whose validity window has passed.
+    for (final goal in goals.where((g) =>
+        g.status == GoalStatus.active && g.expiresAt != null && g.isExpired)) {
+      await saveGoal(goal.copyWith(
+        status: GoalStatus.expired,
+        updatedAt: DateTime.now(),
+      ));
+    }
+    goals.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return goals;
+  }
+
+  /// True when an AI-generated goal for the same type already exists for
+  /// today and is neither finished nor expired — prevents duplicate daily
+  /// suggestions.
+  @override
+  Future<bool> hasActiveAIGoalForToday(GoalType type) async {
+    final goals = await getGoals();
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    return goals.any((g) =>
+        g.source == GoalSource.aiGenerated &&
+        g.type == type &&
+        g.status != GoalStatus.completed &&
+        g.status != GoalStatus.expired &&
+        g.createdAt.year == today.year &&
+        g.createdAt.month == today.month &&
+        g.createdAt.day == today.day);
   }
 
   @override
   Future<ChildGoal?> getGoalById(String id) async {
-    return _goals[id];
+    final json = await _store.getJson(EncryptedDeviceStore.goalsBox, id);
+    if (json == null) return null;
+    try {
+      return ChildGoal.fromJson(json);
+    } catch (_) {
+      return null;
+    }
   }
 
   @override
   Future<void> saveGoal(ChildGoal goal) async {
-    _goals[goal.id] = goal;
+    await _store.putJson(EncryptedDeviceStore.goalsBox, goal.id, goal.toJson());
   }
 
   @override
   Future<void> updateGoalProgress(String id, int minutes) async {
-    final existing = _goals[id];
+    final existing = await getGoalById(id);
     if (existing == null) return;
 
     final updatedMinutes = minutes;
     final isDone = updatedMinutes >= existing.targetMinutes;
 
-    _goals[id] = existing.copyWith(
+    await saveGoal(existing.copyWith(
       currentMinutes: updatedMinutes,
       status: isDone ? GoalStatus.completed : existing.status,
       updatedAt: DateTime.now(),
-    );
+    ));
   }
 
   @override
   Future<void> updateGoalStatus(String id, GoalStatus status) async {
-    final existing = _goals[id];
+    final existing = await getGoalById(id);
     if (existing == null) return;
 
-    _goals[id] = existing.copyWith(
+    await saveGoal(existing.copyWith(
       status: status,
       updatedAt: DateTime.now(),
-    );
+    ));
   }
 
   @override
   Future<void> deleteGoal(String id) async {
-    _goals.remove(id);
+    await _store.delete(EncryptedDeviceStore.goalsBox, id);
   }
 
   @override
   Future<ChildGoal?> getActiveAIGoal() async {
-    final aiGoals = _goals.values
+    final goals = await getGoals();
+    final aiGoals = goals
         .where((g) =>
             g.source == GoalSource.aiGenerated &&
             g.status == GoalStatus.active)
@@ -134,10 +128,10 @@ class InMemoryLocalGoalRepository implements LocalGoalRepository {
 
   @override
   Future<List<ChildGoal>> getGoalHistory() async {
-    return _goals.values
+    final goals = await getGoals();
+    return goals
         .where((g) => g.status == GoalStatus.completed)
         .toList()
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
   }
 }
-

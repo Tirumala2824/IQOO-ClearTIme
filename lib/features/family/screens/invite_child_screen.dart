@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/providers/providers.dart';
 import '../../authentication/controllers/auth_controller.dart';
 import '../../parent/controllers/parent_dashboard_controller.dart';
 import '../controllers/invitation_controller.dart';
@@ -21,9 +22,28 @@ class _InviteChildScreenState extends ConsumerState<InviteChildScreen> {
     Future.microtask(() => _loadInvitations());
   }
 
-  void _loadInvitations() {
-    final family = ref.read(parentDashboardControllerProvider).family;
-    if (family != null) {
+  Future<void> _loadInvitations() async {
+    var user = ref.read(authControllerProvider).user;
+    if (user == null) {
+      final currentAuthUser = ref.read(authRepositoryProvider).currentAuthUser;
+      if (currentAuthUser != null) {
+        user = await ref.read(authRepositoryProvider).getCurrentUserProfile();
+      }
+    }
+    if (user == null) return;
+
+    var family = ref.read(parentDashboardControllerProvider).family;
+    if (family == null) {
+      final famRepo = ref.read(familyRepositoryProvider);
+      family = await famRepo.getFamilyForUser(user.id);
+      if (family != null && mounted) {
+        await ref
+            .read(parentDashboardControllerProvider.notifier)
+            .loadDashboard(user.id);
+      }
+    }
+
+    if (family != null && mounted) {
       ref
           .read(invitationControllerProvider.notifier)
           .loadActiveInvitations(family.id);
@@ -31,14 +51,59 @@ class _InviteChildScreenState extends ConsumerState<InviteChildScreen> {
   }
 
   Future<void> _handleGenerateInvitation() async {
-    final family = ref.read(parentDashboardControllerProvider).family;
-    final user = ref.read(authControllerProvider).user;
-    if (family == null || user == null) return;
+    var user = ref.read(authControllerProvider).user;
+    if (user == null) {
+      final currentAuthUser = ref.read(authRepositoryProvider).currentAuthUser;
+      if (currentAuthUser != null) {
+        user = await ref.read(authRepositoryProvider).getCurrentUserProfile();
+      }
+    }
 
-    await ref.read(invitationControllerProvider.notifier).generateInvitation(
+    if (user == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please sign in as a parent to generate an invitation code.'),
+            backgroundColor: AppTheme.errorRed,
+          ),
+        );
+      }
+      return;
+    }
+
+    var family = ref.read(parentDashboardControllerProvider).family;
+    if (family == null) {
+      final famRepo = ref.read(familyRepositoryProvider);
+      family = await famRepo.getFamilyForUser(user.id);
+      family ??= await famRepo.createFamily(
+        name: user.displayName != null && user.displayName!.isNotEmpty
+            ? '${user.displayName} Family'
+            : 'My Family',
+        adminUserId: user.id,
+      );
+      if (mounted) {
+        await ref
+            .read(parentDashboardControllerProvider.notifier)
+            .loadDashboard(user.id);
+      }
+    }
+
+    final invitation = await ref
+        .read(invitationControllerProvider.notifier)
+        .generateInvitation(
           familyId: family.id,
           parentUserId: user.id,
         );
+
+    if (invitation != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Generated invitation code: ${invitation.invitationCode}'),
+          backgroundColor: AppTheme.successGreen,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
   }
 
   @override

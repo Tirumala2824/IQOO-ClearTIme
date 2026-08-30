@@ -1,8 +1,12 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../config/env_config.dart';
 import '../../data/repositories/auth_repository.dart';
 import '../../data/repositories/family_repository.dart';
 import '../../data/repositories/configuration_repository.dart';
 import '../../data/repositories/local_mission_repository.dart';
+import '../../data/repositories/supabase_mission_repository.dart';
+import '../../data/repositories/local_reward_repository.dart';
+import '../../data/repositories/supabase_reward_repository.dart';
 import '../../data/repositories/local_goal_repository.dart';
 import '../../data/repositories/local_achievement_repository.dart';
 import '../../data/repositories/local_reflection_repository.dart';
@@ -17,16 +21,20 @@ import '../services/abstractions/local_usage_store.dart';
 import '../services/abstractions/local_llm_provider.dart';
 import '../services/abstractions/notification_provider.dart';
 import '../services/abstractions/device_provider.dart';
+import '../services/task_notification_service.dart';
 import '../platform/notification/native_notification_bridge.dart';
 import '../platform/device/native_device_provider.dart';
 import '../../services/usage/android_usage_data_provider.dart';
-import '../../services/usage/demo_usage_data_provider.dart';
+import '../../services/usage/usage_collector_service.dart';
+import '../../services/storage/encrypted_device_store.dart';
 import '../../services/storage/secure_local_usage_store.dart';
 import '../../services/analytics/local_analytics_service.dart';
 import '../../services/analytics/child_report_builder.dart';
 import '../../services/analytics/report_comparison_service.dart';
 import '../../services/analytics/local_trigger_engine.dart';
 import '../../services/analytics/report_scheduler_service.dart';
+import '../../services/analytics/report_request_service.dart';
+import '../../services/analytics/approved_report_sync_service.dart';
 import '../../services/llm/on_device_llm_provider.dart';
 import '../../services/llm/local_ai_coach_service.dart';
 import '../../services/llm/parent_ai_service.dart';
@@ -38,9 +46,16 @@ import '../../services/llm/ai_response_validator.dart';
 import '../../services/llm/deterministic_fallback_service.dart';
 import '../../services/llm/local_model_manager.dart';
 import '../../services/llm/ai_diagnostics_service.dart';
+import '../../services/llm/local_model_runtime.dart';
+import '../../services/llm/local_model_runtime_factory.dart';
+import '../../services/llm/model_distribution_service.dart';
+import '../../services/llm/local_ai_activity_service.dart';
+import '../../services/push/push_notification_service.dart';
 import '../../services/coaching/pattern_detection_service.dart';
 import '../../services/coaching/coaching_goal_generator.dart';
 import '../../services/coaching/coaching_loop_service.dart';
+import '../../services/realtime/mission_realtime_service.dart';
+import '../../services/storage/proof_storage_service.dart';
 
 // --- Phase 1 Repositories ---
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
@@ -62,38 +77,57 @@ final authorizationServiceProvider = Provider<AuthorizationService>((ref) {
 
 // --- Phase 2 Core On-Device Service Providers ---
 
-/// Toggle to switch between real Android platform channel and Demo adapter.
-/// Defaults to FALSE for production real-data usage.
-final useDemoDataProvider = StateProvider<bool>((ref) => false);
-
-final usageDataProvider = Provider<UsageDataProvider>((ref) {
-  final useDemo = ref.watch(useDemoDataProvider);
-  if (useDemo) {
-    return DemoUsageDataProvider();
-  }
-  return AndroidUsageDataProvider();
+/// Single encrypted on-device store for all private local data.
+final encryptedDeviceStoreProvider = Provider<EncryptedDeviceStore>((ref) {
+  final store = EncryptedDeviceStore();
+  return store;
 });
 
 final localUsageStoreProvider = Provider<LocalUsageStore>((ref) {
-  return SecureLocalUsageStore();
+  return SecureLocalUsageStore(
+    store: ref.watch(encryptedDeviceStoreProvider),
+  );
+});
+
+final usageDataProvider = Provider<UsageDataProvider>((ref) {
+  return AndroidUsageDataProvider(
+    usageStore: ref.watch(localUsageStoreProvider),
+  );
+});
+
+final usageCollectorServiceProvider = Provider<UsageCollectorService>((ref) {
+  return UsageCollectorService(
+    usageProvider: ref.watch(usageDataProvider),
+    usageStore: ref.watch(localUsageStoreProvider),
+  );
 });
 
 final localMissionRepositoryProvider = Provider<LocalMissionRepository>((ref) {
-  return InMemoryLocalMissionRepository();
+  return SupabaseMissionRepository();
+});
+
+final rewardRepositoryProvider = Provider<RewardRepository>((ref) {
+  return SupabaseRewardRepository();
 });
 
 final localGoalRepositoryProvider = Provider<LocalGoalRepository>((ref) {
-  return InMemoryLocalGoalRepository(seedAiHistory: false);
+  return EncryptedLocalGoalRepository(
+    store: ref.watch(encryptedDeviceStoreProvider),
+  );
 });
 
 final localAchievementRepositoryProvider =
     Provider<LocalAchievementRepository>((ref) {
-  return InMemoryLocalAchievementRepository();
+  return EncryptedLocalAchievementRepository(
+    store: ref.watch(encryptedDeviceStoreProvider),
+  );
 });
 
 final localReflectionRepositoryProvider =
     Provider<LocalReflectionRepository>((ref) {
-  return InMemoryLocalReflectionRepository();
+  return EncryptedLocalReflectionRepository(
+    store: ref.watch(encryptedDeviceStoreProvider),
+  );
 });
 
 final localAnalyticsServiceProvider = Provider<LocalAnalyticsService>((ref) {
@@ -104,11 +138,15 @@ final localAnalyticsServiceProvider = Provider<LocalAnalyticsService>((ref) {
 
 final localAISettingsRepositoryProvider =
     Provider<LocalAISettingsRepository>((ref) {
-  return InMemoryLocalAISettingsRepository();
+  return EncryptedLocalAISettingsRepository(
+    store: ref.watch(encryptedDeviceStoreProvider),
+  );
 });
 
 final localPromptRepositoryProvider = Provider<LocalPromptRepository>((ref) {
-  return InMemoryLocalPromptRepository();
+  return EncryptedLocalPromptRepository(
+    store: ref.watch(encryptedDeviceStoreProvider),
+  );
 });
 
 final promptTemplateEngineProvider = Provider<PromptTemplateEngine>((ref) {
@@ -129,15 +167,33 @@ final deterministicFallbackServiceProvider =
   return const DeterministicFallbackService();
 });
 
-/// Reactive LLM provider that switches between on-device and external HTTP API.
-/// When AI settings have useExternalApi=true and a valid apiUrl+apiModel,
-/// it creates an HttpLlmProvider. Otherwise, falls back to OnDeviceLLMProvider.
 final localLlmProvider = Provider<LocalLLMProvider>((ref) {
-  return OnDeviceLLMProvider();
+  return OnDeviceLLMProvider(
+    runtime: ref.watch(localModelRuntimeProvider),
+    distribution: ref.watch(modelDistributionServiceProvider),
+  );
 });
 
-/// Mutable override for the LLM provider. The AI settings screen updates this
-/// when the user configures an external API endpoint.
+final localModelRuntimeProvider = Provider<LocalModelRuntime>((ref) {
+  final runtime = createLocalModelRuntime();
+  return runtime;
+});
+
+final modelDistributionServiceProvider =
+    Provider<ModelDistributionService>((ref) {
+  return ModelDistributionService();
+});
+
+final localAiActivityServiceProvider =
+    Provider<LocalAiActivityService>((ref) {
+  return LocalAiActivityService(
+    usageProvider: ref.watch(usageDataProvider),
+    missionRepository: ref.watch(localMissionRepositoryProvider),
+    runtime: ref.watch(localModelRuntimeProvider),
+  );
+});
+
+/// Mutable override for the LLM provider.
 final activeLlmProvider = StateProvider<LocalLLMProvider>((ref) {
   return ref.watch(localLlmProvider);
 });
@@ -205,17 +261,23 @@ final parentAIServiceProvider = Provider<ParentAIService>((ref) {
 
 final approvedReportRepositoryProvider =
     Provider<ApprovedReportRepository>((ref) {
-  return InMemoryApprovedReportRepository();
+  return EncryptedApprovedReportRepository(
+    store: ref.watch(encryptedDeviceStoreProvider),
+  );
 });
 
 final parentReportSettingsRepositoryProvider =
     Provider<ParentReportSettingsRepository>((ref) {
-  return InMemoryParentReportSettingsRepository();
+  return EncryptedParentReportSettingsRepository(
+    store: ref.watch(encryptedDeviceStoreProvider),
+  );
 });
 
 final parentConversationRepositoryProvider =
     Provider<ParentConversationRepository>((ref) {
-  return InMemoryParentConversationRepository();
+  return EncryptedParentConversationRepository(
+    store: ref.watch(encryptedDeviceStoreProvider),
+  );
 });
 
 final childReportBuilderProvider = Provider<ChildReportBuilder>((ref) {
@@ -237,22 +299,52 @@ final notificationProvider = Provider<NotificationProvider>((ref) {
   return NativeNotificationBridge();
 });
 
+final proofStorageServiceProvider = Provider<ProofStorageService>((ref) {
+  return ProofStorageService();
+});
+
+final missionRealtimeServiceProvider = Provider<MissionRealtimeService>((ref) {
+  return MissionRealtimeService(
+    notifications: TaskNotificationService(
+      notificationProvider: ref.watch(notificationProvider),
+    ),
+  );
+});
+
+final pushNotificationServiceProvider = Provider<PushNotificationService>((ref) {
+  return PushNotificationService(configured: EnvConfig.enableFcm);
+});
+
 final deviceProvider = Provider<DeviceProvider>((ref) {
   return NativeDeviceProvider();
 });
 
 final reportSchedulerServiceProvider = Provider<ReportSchedulerService>((ref) {
-  final usageStore = ref.watch(localUsageStoreProvider) as SecureLocalUsageStore;
+  final usageStore =
+      ref.watch(localUsageStoreProvider) as SecureLocalUsageStore;
   final analyticsService = ref.watch(localAnalyticsServiceProvider);
   final reportBuilder = ref.watch(childReportBuilderProvider);
   final reportRepo = ref.watch(approvedReportRepositoryProvider);
+  final syncService = ref.watch(approvedReportSyncServiceProvider);
 
   return ReportSchedulerService(
     usageStore: usageStore,
     analyticsService: analyticsService,
     reportBuilder: reportBuilder,
     reportRepo: reportRepo,
+    syncService: syncService,
   );
+});
+
+final approvedReportSyncServiceProvider =
+    Provider<ApprovedReportSyncService>((ref) {
+  return ApprovedReportSyncService(
+    localRepo: ref.watch(approvedReportRepositoryProvider),
+  );
+});
+
+final reportRequestServiceProvider = Provider<ReportRequestService>((ref) {
+  return ReportRequestService();
 });
 
 // --- Phase 6 Coaching Loop Providers ---
@@ -270,12 +362,13 @@ final coachingLoopServiceProvider = Provider<CoachingLoopService>((ref) {
   final patternService = ref.watch(patternDetectionServiceProvider);
   final goalGenerator = ref.watch(coachingGoalGeneratorProvider);
   final goalRepo = ref.watch(localGoalRepositoryProvider);
+  final store = ref.watch(encryptedDeviceStoreProvider);
 
   return CoachingLoopService(
     usageProvider: usage,
     patternService: patternService,
     goalGenerator: goalGenerator,
     goalRepo: goalRepo,
+    store: store,
   );
 });
-

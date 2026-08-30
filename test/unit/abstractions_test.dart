@@ -11,6 +11,9 @@ import 'package:cleartime/data/models/trigger_config_model.dart';
 // Mock implementations testing interface conformance
 class MockUsageDataProvider implements UsageDataProvider {
   @override
+  Future<UsageAccessState> getUsageAccessState() async => UsageAccessState.ready;
+
+  @override
   Future<bool> hasUsagePermission() async => true;
 
   @override

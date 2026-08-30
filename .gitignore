@@ -51,7 +51,8 @@ app.*.map.json
 .env
 .env.*
 !.env.example
-.vscode/
+
+
 
 
 # Created by https://www.toptal.com/developers/gitignore/api/nextjs
@@ -92,5 +93,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+.vscode/
+.zcode/
 
 # End of https://www.toptal.com/developers/gitignore/api/nextjs

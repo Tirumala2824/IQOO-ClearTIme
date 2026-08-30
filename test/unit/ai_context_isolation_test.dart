@@ -1,13 +1,79 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:cleartime/core/services/abstractions/local_llm_provider.dart';
+import 'package:cleartime/data/models/llm_models.dart';
 import 'package:cleartime/data/models/usage_models.dart';
 import 'package:cleartime/data/models/reflection_model.dart';
 import 'package:cleartime/services/llm/local_ai_context_builder.dart';
 import 'package:cleartime/services/llm/parent_ai_context_builder.dart';
 import 'package:cleartime/services/llm/parent_ai_service.dart';
 import 'package:cleartime/services/llm/local_ai_coach_service.dart';
-import 'package:cleartime/services/llm/on_device_llm_provider.dart';
 import 'package:cleartime/data/repositories/local_prompt_repository.dart';
 import 'package:cleartime/data/repositories/local_ai_settings_repository.dart';
+import 'package:cleartime/services/storage/encrypted_device_store.dart';
+
+import '../helpers/encrypted_store_helper.dart';
+
+/// In-memory offline LLM that returns a valid structured answer, so service
+/// tests exercise the real prompt/validation pipeline without any native
+/// runtime or network access.
+class _FakeOfflineLLMProvider implements LocalLLMProvider {
+  @override
+  Future<bool> isAvailable() async => true;
+
+  @override
+  Future<void> loadModel() async {}
+
+  @override
+  Future<void> loadModelById(String modelId) async {}
+
+  @override
+  Future<void> unloadModel() async {}
+
+  @override
+  Future<String> generate({required String prompt}) async =>
+      '{"answer":"Great mindful balance today!","observations":'
+      '["Screen time stayed within a healthy range"],'
+      '"evidence":["Local device facts"],'
+      '"recommendations":["Keep making mindful choices"],"confidence":0.95}';
+
+  @override
+  Future<ModelInfo> getModelInfo() async => const ModelInfo(
+        modelName: 'ClearTime-SLM-Nano',
+        version: '1.0.0',
+        contextLimit: 2048,
+        quantization: 'q4_k_m',
+        sizeMb: 450,
+        isLoaded: true,
+      );
+
+  @override
+  Future<int> getContextLimit() async => 2048;
+
+  @override
+  Future<int> getMemoryUsage() async => 280;
+
+  @override
+  Future<List<LocalModelCatalogEntry>> getInstalledModels() async => [];
+
+  @override
+  Future<List<LocalModelCatalogEntry>> getAvailableModels() async => [];
+
+  @override
+  Future<bool> installModel(String modelId) async => true;
+
+  @override
+  Future<bool> deleteModel(String modelId) async => true;
+
+  @override
+  Future<bool> selectModel(String modelId) async => true;
+
+  @override
+  Future<StructuredAIResponse> testInference({
+    String? modelId,
+    String? testPrompt,
+  }) async =>
+      const StructuredAIResponse(answer: 'Local test OK', confidence: 1.0);
+}
 
 void main() {
   group('AI Context Isolation & Strict Privacy Tests', () {
@@ -73,9 +139,11 @@ void main() {
     });
 
     test('ParentAIService executes offline with isolated context without network calls', () async {
-      final llm = OnDeviceLLMProvider();
-      final promptRepo = InMemoryLocalPromptRepository();
-      final settingsRepo = InMemoryLocalAISettingsRepository();
+      final store = await createTestDeviceStore();
+      await store.clearBox(EncryptedDeviceStore.aiSettingsBox);
+      final llm = _FakeOfflineLLMProvider();
+      final promptRepo = EncryptedLocalPromptRepository(store: store);
+      final settingsRepo = EncryptedLocalAISettingsRepository(store: store);
 
       final parentService = ParentAIService(
         llmProvider: llm,
@@ -98,9 +166,10 @@ void main() {
     });
 
     test('Local AI disabled state produces safe deterministic fallback for both child and parent', () async {
-      final llm = OnDeviceLLMProvider();
-      final promptRepo = InMemoryLocalPromptRepository();
-      final settingsRepo = InMemoryLocalAISettingsRepository();
+      final store = await createTestDeviceStore();
+      final llm = _FakeOfflineLLMProvider();
+      final promptRepo = EncryptedLocalPromptRepository(store: store);
+      final settingsRepo = EncryptedLocalAISettingsRepository(store: store);
 
       // Disable AI
       await settingsRepo.setAiEnabled(false);

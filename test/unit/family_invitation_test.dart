@@ -37,10 +37,25 @@ class MockFamilyRepository implements FamilyRepository {
   }
 
   @override
+  Future<List<Family>> getAllFamiliesForUser(String userId) async {
+    final fam = await getFamilyForUser(userId);
+    return fam != null ? [fam] : [];
+  }
+
+  @override
   Future<List<ChildProfile>> getChildrenForFamily(String familyId) async => [];
 
   @override
   Future<ChildProfile?> getChildProfileForUser(String userId) async => null;
+
+  @override
+  Future<ChildProfile?> updateChildProfile({
+    String? nickname,
+    int? age,
+    int? avatarIndex,
+  }) async {
+    return null;
+  }
 
   @override
   Future<FamilyInvitation> generateInvitation({

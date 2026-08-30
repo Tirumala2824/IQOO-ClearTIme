@@ -14,52 +14,11 @@ class ModelManagerScreen extends ConsumerStatefulWidget {
 class _ModelManagerScreenState extends ConsumerState<ModelManagerScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  List<LocalModelCatalogEntry> _installedModels = const [
-    LocalModelCatalogEntry(
-      id: 'slm-nano-380m',
-      name: 'ClearTime-SLM-Nano',
-      version: '1.2.0',
-      sizeDescription: '380 MB',
-      sizeMb: 380,
-      contextTokens: 2048,
-      quantization: 'q4_k_m',
-      compatibility: 'Ultra-low battery impact • All mobile CPUs/NPUs',
-      isInstalled: true,
-      isActive: true,
-      description:
-          'Ultra-compact edge model fine-tuned for instant local habit summaries and daily quest coaching.',
-    ),
-    LocalModelCatalogEntry(
-      id: 'slm-balanced-1b',
-      name: 'ClearTime-SLM-Balanced',
-      version: '1.4.0',
-      sizeDescription: '1.1 GB',
-      sizeMb: 1100,
-      contextTokens: 4096,
-      quantization: 'q4_k_s',
-      compatibility: 'Recommended for Snapdragon / Dimensity NPUs',
-      isInstalled: true,
-      isActive: false,
-      description:
-          'Balanced reasoning model providing deeper weekly trend comparisons and conversational habit advice.',
-    ),
-  ];
-  List<LocalModelCatalogEntry> _availableModels = const [
-    LocalModelCatalogEntry(
-      id: 'slm-pro-3b',
-      name: 'ClearTime-SLM-Pro',
-      version: '2.0.0',
-      sizeDescription: '2.8 GB',
-      sizeMb: 2800,
-      contextTokens: 8192,
-      quantization: 'q5_k_m',
-      compatibility: 'High-performance devices with 8GB+ RAM',
-      isInstalled: false,
-      isActive: false,
-      description:
-          'Comprehensive analytical model designed for complex long-term family wellbeing correlations.',
-    ),
-  ];
+
+  /// No fabricated catalog: the installed list comes from verified local
+  /// artifacts and the catalog from the signed distribution manifest.
+  List<LocalModelCatalogEntry> _installedModels = const [];
+  List<LocalModelCatalogEntry> _availableModels = const [];
   String? _actionInProgressModelId;
 
   @override
@@ -360,7 +319,9 @@ class _ModelManagerScreenState extends ConsumerState<ModelManagerScreen>
         child: Padding(
           padding: EdgeInsets.all(20.0),
           child: Text(
-            'All local models in catalog are already installed on your device.',
+            'No signed model catalog is available right now. Models appear '
+            'here from the licensed distribution manifest, not from a local '
+            'list.',
             textAlign: TextAlign.center,
             style: TextStyle(color: AppTheme.neutralMuted),
           ),

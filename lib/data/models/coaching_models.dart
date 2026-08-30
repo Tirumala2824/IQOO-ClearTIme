@@ -83,6 +83,26 @@ class DetectedPattern {
         'evidence': evidence,
         'detectedAt': detectedAt.toIso8601String(),
       };
+
+  factory DetectedPattern.fromJson(Map<String, dynamic> json) =>
+      DetectedPattern(
+        id: json['id'] as String,
+        type: PatternType.values.firstWhere(
+          (t) => t.name == json['type'],
+          orElse: () => PatternType.neutral,
+        ),
+        category: PatternCategory.values.firstWhere(
+          (c) => c.name == json['category'],
+          orElse: () => PatternCategory.screenTotal,
+        ),
+        title: json['title'] as String? ?? '',
+        description: json['description'] as String? ?? '',
+        suggestedAction: json['suggestedAction'] as String? ?? '',
+        evidence: Map<String, double>.from(json['evidence'] as Map? ?? {}),
+        detectedAt: json['detectedAt'] != null
+            ? DateTime.parse(json['detectedAt'] as String)
+            : DateTime.now(),
+      );
 }
 
 // ─── Goal Evaluation Models ───
@@ -153,6 +173,22 @@ class GoalEvaluation {
         'actualValue': actualValue,
         'evaluatedAt': evaluatedAt.toIso8601String(),
       };
+
+  factory GoalEvaluation.fromJson(Map<String, dynamic> json) =>
+      GoalEvaluation(
+        goalId: json['goalId'] as String,
+        result: EvaluationResult.values.firstWhere(
+          (r) => r.name == json['result'],
+          orElse: () => EvaluationResult.notYetEvaluated,
+        ),
+        score: (json['score'] as num? ?? 0).toInt(),
+        feedbackMessage: json['feedbackMessage'] as String? ?? '',
+        targetValue: (json['targetValue'] as num? ?? 0).toInt(),
+        actualValue: (json['actualValue'] as num? ?? 0).toInt(),
+        evaluatedAt: json['evaluatedAt'] != null
+            ? DateTime.parse(json['evaluatedAt'] as String)
+            : DateTime.now(),
+      );
 }
 
 // ─── Coaching Session Models ───
@@ -204,6 +240,15 @@ class UsageSnapshot {
         'topCategory': topCategory,
         'changeFromPrevious': changeFromPrevious,
       };
+
+  factory UsageSnapshot.fromJson(Map<String, dynamic> json) => UsageSnapshot(
+        totalMinutes: (json['totalMinutes'] as num? ?? 0).toInt(),
+        focusMinutes: (json['focusMinutes'] as num? ?? 0).toInt(),
+        breakCount: (json['breakCount'] as num? ?? 0).toInt(),
+        unlockCount: (json['unlockCount'] as num? ?? 0).toInt(),
+        topCategory: json['topCategory'] as String? ?? 'General',
+        changeFromPrevious: (json['changeFromPrevious'] as num? ?? 0).toDouble(),
+      );
 }
 
 class CoachingSession {
@@ -296,6 +341,33 @@ class CoachingSession {
         'status': status.name,
         'createdAt': createdAt.toIso8601String(),
       };
+
+  factory CoachingSession.fromJson(Map<String, dynamic> json) =>
+      CoachingSession(
+        id: json['id'] as String,
+        date: json['date'] != null
+            ? DateTime.parse(json['date'] as String)
+            : DateTime.now(),
+        usageSnapshot: UsageSnapshot.fromJson(
+            json['usageSnapshot'] as Map<String, dynamic>? ?? {}),
+        patterns: (json['patterns'] as List<dynamic>? ?? [])
+            .map((p) => DetectedPattern.fromJson(p as Map<String, dynamic>))
+            .toList(),
+        generatedGoal: json['generatedGoal'] != null
+            ? ChildGoal.fromJson(json['generatedGoal'] as Map<String, dynamic>)
+            : null,
+        previousGoalEvaluation: json['previousGoalEvaluation'] != null
+            ? GoalEvaluation.fromJson(
+                json['previousGoalEvaluation'] as Map<String, dynamic>)
+            : null,
+        status: CoachingSessionStatus.values.firstWhere(
+          (s) => s.name == json['status'],
+          orElse: () => CoachingSessionStatus.complete,
+        ),
+        createdAt: json['createdAt'] != null
+            ? DateTime.parse(json['createdAt'] as String)
+            : DateTime.now(),
+      );
 }
 
 // ─── Coaching History ───
@@ -360,4 +432,15 @@ class CoachingHistory {
     if (scores.first < scores.last) return 'needs_attention';
     return 'stable';
   }
+
+  Map<String, dynamic> toJson() => {
+        'sessions': sessions.map((s) => s.toJson()).toList(),
+      };
+
+  factory CoachingHistory.fromJson(Map<String, dynamic> json) =>
+      CoachingHistory(
+        sessions: (json['sessions'] as List<dynamic>? ?? [])
+            .map((s) => CoachingSession.fromJson(s as Map<String, dynamic>))
+            .toList(),
+      );
 }

@@ -103,8 +103,8 @@ class ModelInfo {
       };
 
   factory ModelInfo.fromJson(Map<String, dynamic> json) => ModelInfo(
-        modelName: json['modelName'] as String? ?? 'ClearTime-SLM-Nano',
-        version: json['version'] as String? ?? '1.2.0',
+        modelName: json['modelName'] as String? ?? '',
+        version: json['version'] as String? ?? '',
         contextLimit: (json['contextLimit'] as num? ?? 2048).toInt(),
         quantization: json['quantization'] as String? ?? 'q4_k_m',
         sizeMb: (json['sizeMb'] as num? ?? 380).toInt(),
@@ -374,7 +374,7 @@ class AISettings {
 
   const AISettings({
     this.isAiEnabled = true,
-    this.activeModelId = 'slm-nano-380m',
+    this.activeModelId = '',
     this.temperature = 0.2,
     this.maxTokens = 512,
     this.enableDiagnostics = true,
@@ -430,7 +430,7 @@ class AISettings {
 
   factory AISettings.fromJson(Map<String, dynamic> json) => AISettings(
         isAiEnabled: json['isAiEnabled'] as bool? ?? true,
-        activeModelId: json['activeModelId'] as String? ?? 'slm-nano-380m',
+        activeModelId: json['activeModelId'] as String? ?? '',
         temperature: (json['temperature'] as num? ?? 0.2).toDouble(),
         maxTokens: (json['maxTokens'] as num? ?? 512).toInt(),
         enableDiagnostics: json['enableDiagnostics'] as bool? ?? true,
@@ -480,8 +480,8 @@ class AIDiagnostics {
       };
 
   factory AIDiagnostics.fromJson(Map<String, dynamic> json) => AIDiagnostics(
-        activeModel: json['activeModel'] as String? ?? 'ClearTime-SLM-Nano',
-        version: json['version'] as String? ?? '1.2.0',
+        activeModel: json['activeModel'] as String? ?? '',
+        version: json['version'] as String? ?? '',
         inferenceTimeMs: (json['inferenceTimeMs'] as num? ?? 320).toInt(),
         contextTokens: (json['contextTokens'] as num? ?? 450).toInt(),
         responseTokens: (json['responseTokens'] as num? ?? 120).toInt(),
@@ -526,7 +526,7 @@ class AIContext {
     buffer.writeln('- Mindful Breaks Taken: $breakCount breaks');
     buffer.writeln('- Usage Change vs Yesterday: ${usageChangePercentage.toStringAsFixed(1)}%');
     buffer.writeln('- Top App Category: $topCategory');
-    buffer.writeln('- Completed Quests: $completedMissions');
+    buffer.writeln('- Completed Activities: $completedMissions');
     buffer.writeln('- Active Wellbeing Goals: $activeGoalsCount');
     if (recentReflection != null) {
       buffer.writeln('- Child Daily Reflection: $recentReflection');

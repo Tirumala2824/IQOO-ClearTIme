@@ -25,7 +25,7 @@ class DeterministicFallbackService {
     final buffer = StringBuffer();
     buffer.write("Today's usage was $timeStr with $focusStr of focused time. ");
     buffer.write(
-        'You took ${context.breakCount} mindful pauses and finished ${context.completedMissions} quests! ');
+        'You took ${context.breakCount} mindful pauses and finished ${context.completedMissions} activities. ');
     buffer.write(
         'Keep making mindful choices and remember to take regular eye-rest breaks.');
 

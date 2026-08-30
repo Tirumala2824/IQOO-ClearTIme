@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/providers/providers.dart';
 import '../../../data/models/approved_report_model.dart';
-import '../../../data/models/child_profile_model.dart';
 import '../controllers/parent_dashboard_controller.dart';
 
 class ParentReportCompareScreen extends ConsumerStatefulWidget {
@@ -72,17 +71,25 @@ class _ParentReportCompareScreenState
     final comparisonService = ref.watch(reportComparisonServiceProvider);
 
     final children = parentState.children;
+
+    if (children.isEmpty) {
+      return const Scaffold(
+        body: Center(
+          child: Padding(
+            padding: EdgeInsets.all(32),
+            child: Text(
+              'No children linked to this family yet, so there are no '
+              'approved reports to compare.',
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
+      );
+    }
+
     final activeChild = children.firstWhere(
       (c) => c.id == _selectedChildId,
-      orElse: () => children.isNotEmpty
-          ? children.first
-          : ChildProfile(
-              id: 'child-1',
-              nickname: 'Alex',
-              age: 12,
-              createdAt: DateTime.now(),
-              updatedAt: DateTime.now(),
-            ),
+      orElse: () => children.first,
     );
 
     return Scaffold(

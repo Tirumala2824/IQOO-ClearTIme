@@ -1,7 +1,11 @@
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 const { Client } = require('pg');
 
-const connectionString = "postgresql://postgres.bmtadgpkckkgcmvnqobg:IQoobengaluru2908@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres";
+const connectionString = process.env.SUPABASE_DATABASE_URL;
+if (!connectionString) {
+  console.error("SUPABASE_DATABASE_URL environment variable is required.");
+  process.exit(1);
+}
 
 async function run() {
   const client = new Client({
@@ -179,7 +183,7 @@ async function run() {
 
         INSERT INTO public.notification_preferences (family_id, user_id, daily_summary, instant_alerts, quiet_hours_start, quiet_hours_end)
         VALUES (NEW.id, NEW.admin_user_id, true, true, '21:00', '07:00')
-        ON CONFLICT (family_id, user_id) DO NOTHING;
+        ON CONFLICT (user_id) DO UPDATE SET family_id = EXCLUDED.family_id, updated_at = NOW();
 
         RETURN NEW;
     END;

@@ -1,7 +1,11 @@
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 const { Client } = require('pg');
 
-const connectionString = "postgresql://postgres.bmtadgpkckkgcmvnqobg:IQoobengaluru2908@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres";
+const connectionString = process.env.SUPABASE_DATABASE_URL;
+if (!connectionString) {
+  console.error("SUPABASE_DATABASE_URL environment variable is required.");
+  process.exit(1);
+}
 
 async function run() {
   const client = new Client({

@@ -242,9 +242,7 @@ class _ParentTriggersScreenState extends ConsumerState<ParentTriggersScreen> {
                           final newConfig = TriggerConfiguration(
                             id: _uuid.v4(),
                             familyId: family.id,
-                            childId: selectedChildId.isNotEmpty
-                                ? selectedChildId
-                                : (children.isNotEmpty ? children.first.id : 'child-1'),
+                            childId: selectedChildId,
                             type: selectedType,
                             threshold: threshold,
                             enabled: true,

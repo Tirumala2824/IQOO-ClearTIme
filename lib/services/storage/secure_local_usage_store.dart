@@ -1,61 +1,37 @@
-import 'dart:convert';
-import 'package:crypto/crypto.dart';
 import '../../core/services/abstractions/local_usage_store.dart';
 import '../../data/models/usage_models.dart';
+import 'encrypted_device_store.dart';
 import 'retention_config.dart';
 
-/// SecureLocalUsageStore provides encrypted on-device storage for raw usage
-/// and aggregated facts using AES-CBC encryption with device-derived keys.
+/// Encrypted on-device store for raw usage records and daily aggregates.
 ///
-/// STRICT PRIVACY RULE:
-/// All data remains strictly local and encrypted. No raw usage ever leaves the device.
+/// Raw usage is stored encrypted under a keychain-held master key and is
+/// retained only as long as [RetentionConfig] allows. No raw usage ever
+/// leaves the device.
 class SecureLocalUsageStore implements LocalUsageStore {
+  final EncryptedDeviceStore _store;
   final RetentionConfig retentionConfig;
-  final Map<String, String> _encryptedUsageRecords = {};
-  final Map<String, String> _encryptedAggregates = {};
   bool _isInitialized = false;
 
-  // Key derived from device salt
-  late final List<int> _encryptionKey;
-
   SecureLocalUsageStore({
+    EncryptedDeviceStore? store,
     this.retentionConfig = RetentionConfig.standard,
-    String? deviceKeySeed,
-  }) {
-    final seed = deviceKeySeed ?? 'ClearTime-LocalDevice-Salt-2026';
-    _encryptionKey = sha256.convert(utf8.encode(seed)).bytes;
-  }
+  }) : _store = store ?? EncryptedDeviceStore();
 
   @override
   Future<void> initialize() async {
+    await _store.initialize();
     _isInitialized = true;
-  }
-
-  // --- Encryption / Decryption Helpers ---
-  String _encrypt(String plainText) {
-    // Encrypt using XOR-stream cipher with SHA-256 key schedule for on-device obfuscated storage
-    final plainBytes = utf8.encode(plainText);
-    final cipherBytes = <int>[];
-    for (int i = 0; i < plainBytes.length; i++) {
-      cipherBytes.add(plainBytes[i] ^ _encryptionKey[i % _encryptionKey.length]);
-    }
-    return base64Encode(cipherBytes);
-  }
-
-  String _decrypt(String cipherText) {
-    final cipherBytes = base64Decode(cipherText);
-    final plainBytes = <int>[];
-    for (int i = 0; i < cipherBytes.length; i++) {
-      plainBytes.add(cipherBytes[i] ^ _encryptionKey[i % _encryptionKey.length]);
-    }
-    return utf8.decode(plainBytes);
   }
 
   @override
   Future<void> saveUsage(UsageRecord usage) async {
-    final jsonStr = jsonEncode(usage.toJson());
-    final cipher = _encrypt(jsonStr);
-    _encryptedUsageRecords[usage.id] = cipher;
+    await initialize();
+    await _store.putJson(
+      EncryptedDeviceStore.usageRecordsBox,
+      usage.id,
+      usage.toJson(),
+    );
   }
 
   @override
@@ -67,19 +43,21 @@ class SecureLocalUsageStore implements LocalUsageStore {
 
   @override
   Future<List<UsageRecord>> getUsage({DateTime? start, DateTime? end}) async {
+    await initialize();
     final records = <UsageRecord>[];
-    for (final entry in _encryptedUsageRecords.entries) {
+    final jsons = await _store.getAllJson(
+      EncryptedDeviceStore.usageRecordsBox,
+      onCorrupt: (key, _) =>
+          _store.delete(EncryptedDeviceStore.usageRecordsBox, key),
+    );
+    for (final json in jsons) {
       try {
-        final plain = _decrypt(entry.value);
-        final json = jsonDecode(plain) as Map<String, dynamic>;
         final record = UsageRecord.fromJson(json);
-
         if (start != null && record.startTime.isBefore(start)) continue;
         if (end != null && record.endTime.isAfter(end)) continue;
-
         records.add(record);
       } catch (_) {
-        // Skip corrupted
+        // Skip corrupted records.
       }
     }
     records.sort((a, b) => b.startTime.compareTo(a.startTime));
@@ -88,21 +66,24 @@ class SecureLocalUsageStore implements LocalUsageStore {
 
   @override
   Future<void> saveDailyAggregate(DailyAggregate aggregate) async {
-    final jsonStr = jsonEncode(aggregate.toJson());
-    final cipher = _encrypt(jsonStr);
-    _encryptedAggregates[aggregate.dateString] = cipher;
+    await initialize();
+    await _store.putJson(
+      EncryptedDeviceStore.usageAggregatesBox,
+      aggregate.dateString,
+      aggregate.toJson(),
+    );
   }
 
   @override
   Future<DailyAggregate?> getDailyAggregate(DateTime date) async {
-    final dateStr =
-        '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-    final cipher = _encryptedAggregates[dateStr];
-    if (cipher == null) return null;
-
+    await initialize();
+    final dateStr = _dateString(date);
+    final json = await _store.getJson(
+      EncryptedDeviceStore.usageAggregatesBox,
+      dateStr,
+    );
+    if (json == null) return null;
     try {
-      final plain = _decrypt(cipher);
-      final json = jsonDecode(plain) as Map<String, dynamic>;
       return DailyAggregate.fromJson(json);
     } catch (_) {
       return null;
@@ -111,14 +92,8 @@ class SecureLocalUsageStore implements LocalUsageStore {
 
   @override
   Future<List<DailyAggregate>> getWeeklyAggregate() async {
-    final list = <DailyAggregate>[];
-    for (final entry in _encryptedAggregates.entries) {
-      try {
-        final plain = _decrypt(entry.value);
-        final json = jsonDecode(plain) as Map<String, dynamic>;
-        list.add(DailyAggregate.fromJson(json));
-      } catch (_) {}
-    }
+    await initialize();
+    final list = await _getAllAggregates();
     list.sort((a, b) => b.dateString.compareTo(a.dateString));
     return list.take(7).toList();
   }
@@ -126,60 +101,86 @@ class SecureLocalUsageStore implements LocalUsageStore {
   @override
   Future<List<DailyAggregate>> getDailyAggregatesInRange(
       String start, String end) async {
-    final list = <DailyAggregate>[];
-    for (final entry in _encryptedAggregates.entries) {
-      if (entry.key.compareTo(start) >= 0 && entry.key.compareTo(end) <= 0) {
-        try {
-          final plain = _decrypt(entry.value);
-          final json = jsonDecode(plain) as Map<String, dynamic>;
-          list.add(DailyAggregate.fromJson(json));
-        } catch (_) {}
+    await initialize();
+    final list = await _getAllAggregates();
+    return list
+        .where((a) =>
+            a.dateString.compareTo(start) >= 0 &&
+            a.dateString.compareTo(end) <= 0)
+        .toList()
+      ..sort((a, b) => a.dateString.compareTo(b.dateString));
+  }
+
+  Future<List<DailyAggregate>> _getAllAggregates() async {
+    final jsons = await _store.getAllJson(
+      EncryptedDeviceStore.usageAggregatesBox,
+      onCorrupt: (key, _) =>
+          _store.delete(EncryptedDeviceStore.usageAggregatesBox, key),
+    );
+    final aggregates = <DailyAggregate>[];
+    for (final json in jsons) {
+      try {
+        aggregates.add(DailyAggregate.fromJson(json));
+      } catch (_) {
+        // Skip corrupted entries.
       }
     }
-    list.sort((a, b) => a.dateString.compareTo(b.dateString));
-    return list;
+    return aggregates;
   }
 
   @override
   Future<void> deleteUsage(String id) async {
-    _encryptedUsageRecords.remove(id);
+    await initialize();
+    await _store.delete(EncryptedDeviceStore.usageRecordsBox, id);
   }
 
   @override
   Future<int> deleteExpiredUsage() async {
-    final cutoff = DateTime.now().subtract(
-      Duration(days: retentionConfig.rawUsageRetentionDays),
-    );
+    await initialize();
+    final rawCutoff =
+        DateTime.now().subtract(Duration(days: retentionConfig.rawUsageRetentionDays));
+    var deleted = 0;
 
-    int deletedCount = 0;
-    final keysToRemove = <String>[];
-
-    for (final entry in _encryptedUsageRecords.entries) {
+    final rawJsons = await _store.getAllJson(EncryptedDeviceStore.usageRecordsBox);
+    for (final json in rawJsons) {
       try {
-        final plain = _decrypt(entry.value);
-        final json = jsonDecode(plain) as Map<String, dynamic>;
         final record = UsageRecord.fromJson(json);
-        if (record.endTime.isBefore(cutoff)) {
-          keysToRemove.add(entry.key);
+        if (record.endTime.isBefore(rawCutoff)) {
+          await deleteUsage(record.id);
+          deleted++;
         }
       } catch (_) {
-        keysToRemove.add(entry.key);
+        // Corrupted entries are removed during reads.
       }
     }
 
-    for (final key in keysToRemove) {
-      _encryptedUsageRecords.remove(key);
-      deletedCount++;
+    final aggCutoff = DateTime.now()
+        .subtract(Duration(days: retentionConfig.aggregateRetentionDays));
+    final aggJsons =
+        await _store.getAllJson(EncryptedDeviceStore.usageAggregatesBox);
+    for (final json in aggJsons) {
+      try {
+        final agg = DailyAggregate.fromJson(json);
+        if (agg.date.isBefore(aggCutoff)) {
+          await _store.delete(EncryptedDeviceStore.usageAggregatesBox, agg.dateString);
+          deleted++;
+        }
+      } catch (_) {
+        // Skip corrupted entries.
+      }
     }
-
-    return deletedCount;
+    return deleted;
   }
 
   @override
   Future<void> wipeAllLocalData() async {
-    _encryptedUsageRecords.clear();
-    _encryptedAggregates.clear();
+    await initialize();
+    await _store.clearBox(EncryptedDeviceStore.usageRecordsBox);
+    await _store.clearBox(EncryptedDeviceStore.usageAggregatesBox);
   }
 
   bool get isInitialized => _isInitialized;
+
+  String _dateString(DateTime date) =>
+      '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
 }

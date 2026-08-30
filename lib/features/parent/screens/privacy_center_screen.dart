@@ -299,7 +299,7 @@ class _PrivacyCenterScreenState extends ConsumerState<PrivacyCenterScreen> {
                     icon: Icons.emoji_events_outlined,
                     title: 'Goals & Positive Milestones',
                     description:
-                        'Completed learning quests, screen-free missions, and earned wellbeing achievements.',
+                        'Completed learning, screen-free activities, and wellbeing milestones.',
                   ),
                 ]),
 

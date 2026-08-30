@@ -79,6 +79,54 @@ class _ChildAiScreenState extends ConsumerState<ChildAiScreen> {
       ),
       body: Column(
         children: [
+          // Truthful availability banner
+          if (aiState.modelInfo != null &&
+              !(aiState.modelInfo!.isInstalled && aiState.modelInfo!.isLoaded))
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppTheme.warningOrange.withAlpha((0.15 * 255).round()),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.info_outline_rounded,
+                      color: AppTheme.warningOrange, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      aiState.modelInfo!.isInstalled
+                          ? 'AI is still loading. Replies appear once the model is ready.'
+                          : 'AI setup needed. This buddy only works after a local model is downloaded on this device.',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppTheme.neutralMuted,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          if (aiState.errorMessage != null)
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppTheme.alertRed.withAlpha((0.12 * 255).round()),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                'AI is unavailable right now: ${aiState.errorMessage}',
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppTheme.alertRed,
+                ),
+              ),
+            ),
+
           // Suggested prompts horizontally scrollable
           Container(
             height: 48,

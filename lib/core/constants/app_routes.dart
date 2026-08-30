@@ -38,4 +38,5 @@ class AppRoutes {
   static const String childJoinFamily = '/child/join';
   static const String childAiSettings = '/child/settings/ai';
   static const String childPrivacyCenter = '/child/settings/privacy';
+  static const String usageAccessSetup = '/usage-access-setup';
 }

@@ -45,6 +45,7 @@ class LocalAICoachService {
   Future<StructuredAIResponse> askCoach({
     required String question,
     required AIContext context,
+    String? childNickname,
   }) async {
     final settings = await _settingsRepo.getSettings();
     if (!settings.isAiEnabled) {
@@ -87,7 +88,9 @@ class LocalAICoachService {
           : 0;
 
       final vars = {
-        'child_name': 'Explorer',
+        'child_name': (childNickname == null || childNickname.trim().isEmpty)
+            ? 'your child'
+            : childNickname.trim(),
         'screen_time': screenTimeStr,
         'previous_screen_time': prevTimeStr,
         'usage_change':
@@ -95,7 +98,7 @@ class LocalAICoachService {
         'focus_time': focusTimeStr,
         'top_category': context.topCategory,
         'goal_progress': '$progressPct%',
-        'achievement': context.completedMissions > 0 ? 'Active Explorer' : 'Getting Started',
+        'achievement': context.completedMissions > 0 ? 'Progress made' : 'Getting started',
         'break_count': '${context.breakCount}',
         'completed_missions': '${context.completedMissions}',
       };

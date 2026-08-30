@@ -7,20 +7,25 @@ import 'package:cleartime/data/models/report_config_model.dart';
 import 'package:cleartime/data/models/trigger_config_model.dart';
 import 'package:cleartime/data/models/privacy_setting_model.dart';
 import 'package:cleartime/data/models/notification_pref_model.dart';
+import 'package:cleartime/data/models/usage_models.dart';
 import 'package:cleartime/data/repositories/local_mission_repository.dart';
+import 'package:cleartime/data/repositories/local_reward_repository.dart';
 import 'package:cleartime/data/repositories/local_achievement_repository.dart';
 import 'package:cleartime/data/repositories/family_repository.dart';
 import 'package:cleartime/data/repositories/configuration_repository.dart';
 import 'package:cleartime/data/repositories/approved_report_repository.dart';
 import 'package:cleartime/data/repositories/local_goal_repository.dart';
+import 'package:cleartime/core/services/abstractions/usage_data_provider.dart';
 import 'package:cleartime/core/services/abstractions/notification_provider.dart';
+import 'package:cleartime/core/services/task_notification_service.dart';
 import 'package:cleartime/core/platform/notification/native_notification_bridge.dart';
 import 'package:cleartime/features/parent/controllers/parent_dashboard_controller.dart';
 import 'package:cleartime/features/child/controllers/child_missions_controller.dart';
-import 'package:cleartime/services/usage/demo_usage_data_provider.dart';
 import 'package:cleartime/services/coaching/coaching_loop_service.dart';
 import 'package:cleartime/services/coaching/pattern_detection_service.dart';
 import 'package:cleartime/services/coaching/coaching_goal_generator.dart';
+import 'package:cleartime/services/storage/encrypted_device_store.dart';
+import '../helpers/encrypted_store_helper.dart';
 
 class TestFamilyRepository implements FamilyRepository {
   @override
@@ -32,6 +37,11 @@ class TestFamilyRepository implements FamilyRepository {
       Family(id: 'f1', name: 'Test Family', adminUserId: userId, createdAt: DateTime.now(), updatedAt: DateTime.now());
 
   @override
+  Future<List<Family>> getAllFamiliesForUser(String userId) async => [
+        Family(id: 'f1', name: 'Test Family', adminUserId: userId, createdAt: DateTime.now(), updatedAt: DateTime.now()),
+      ];
+
+  @override
   Future<List<ChildProfile>> getChildrenForFamily(String familyId) async => [
         ChildProfile(id: 'child-1', userId: 'u-c1', familyId: familyId, nickname: 'Alex', createdAt: DateTime.now()),
       ];
@@ -39,6 +49,22 @@ class TestFamilyRepository implements FamilyRepository {
   @override
   Future<ChildProfile?> getChildProfileForUser(String userId) async =>
       ChildProfile(id: 'child-1', userId: userId, familyId: 'f1', nickname: 'Alex', createdAt: DateTime.now());
+
+  @override
+  Future<ChildProfile?> updateChildProfile({
+    String? nickname,
+    int? age,
+    int? avatarIndex,
+  }) async =>
+      ChildProfile(
+        id: 'child-1',
+        userId: 'u-c1',
+        familyId: 'f1',
+        nickname: nickname ?? 'Alex',
+        age: age,
+        avatarIndex: avatarIndex ?? 0,
+        createdAt: DateTime.now(),
+      );
 
   @override
   Future<FamilyInvitation> generateInvitation({required String familyId, required String createdBy}) async =>
@@ -81,31 +107,77 @@ class TestConfigurationRepository implements ConfigurationRepository {
   Future<void> deleteTriggerConfiguration(String id) async {}
 
   @override
-  Future<PrivacySetting> getPrivacySettings({required String familyId, required String userId}) async =>
+  Future<PrivacySetting?> getPrivacySettings({required String familyId, required String userId}) async =>
       PrivacySetting(id: 'ps-1', familyId: familyId, userId: userId, updatedAt: DateTime.now());
   @override
   Future<PrivacySetting> updatePrivacySettings(PrivacySetting settings) async => settings;
 
   @override
-  Future<NotificationPreference> getNotificationPreferences(String userId) async =>
+  Future<NotificationPreference?> getNotificationPreferences(String userId) async =>
       NotificationPreference(id: 'np-1', userId: userId, familyId: 'f1', updatedAt: DateTime.now());
   @override
   Future<NotificationPreference> updateNotificationPreferences(NotificationPreference prefs) async => prefs;
 }
 
+/// Minimal fake usage provider for controller wiring in unit tests. The
+/// production demo provider was removed; the controller only needs a
+/// [UsageDataProvider] implementation.
+class _FakeUsageProvider implements UsageDataProvider {
+  @override
+  Future<UsageAccessState> getUsageAccessState() async => UsageAccessState.ready;
+
+  @override
+  Future<bool> hasUsagePermission() async => true;
+
+  @override
+  Future<bool> requestUsagePermission() async => true;
+
+  @override
+  Future<UsageSummary> getTodayUsage() async => const UsageSummary(
+        totalMinutes: 120,
+        focusMinutes: 45,
+        breakCount: 3,
+        screenUnlockCount: 10,
+        categories: [],
+        topApps: [],
+      );
+
+  @override
+  Future<List<DailyUsage>> getDailyUsage() async => const [];
+
+  @override
+  Future<List<DailyUsage>> getWeeklyUsage() async => const [];
+
+  @override
+  Future<List<DailyUsage>> getMonthlyUsage() async => const [];
+
+  @override
+  Future<List<CategoryUsage>> getCategoryUsage() async => const [];
+
+  @override
+  Future<List<UsageTimelineEntry>> getUsageTimeline() async => const [];
+
+  @override
+  Future<List<FocusSession>> getFocusSessions() async => const [];
+}
+
 void main() {
-  group('Parent-Assigned Real-World Tasks Architecture & Lifecycle Tests', () {
+  group('Parent-Assigned Real-World Activities Architecture & Lifecycle Tests', () {
+    late EncryptedDeviceStore store;
     late LocalMissionRepository missionRepo;
     late NotificationProvider notifBridge;
     late LocalAchievementRepository achRepo;
+    late RewardRepository rewardRepo;
 
-    setUp(() {
+    setUp(() async {
+      store = await createTestDeviceStore();
       missionRepo = InMemoryLocalMissionRepository();
       notifBridge = NativeNotificationBridge();
-      achRepo = InMemoryLocalAchievementRepository();
+      achRepo = EncryptedLocalAchievementRepository(store: store);
+      rewardRepo = InMemoryRewardRepository();
     });
 
-    test('1. Repository starts empty with zero fake/dummy tasks', () async {
+    test('1. Repository starts empty with zero fake/dummy activities', () async {
       final missions = await missionRepo.getMissions();
       expect(missions, isEmpty);
 
@@ -113,15 +185,13 @@ void main() {
       expect(parentTasks, isEmpty);
     });
 
-    test('2. Parent creates and persists real task with all fields', () async {
+    test('2. Parent creates and persists real activity with all fields', () async {
       final dueDate = DateTime.now().add(const Duration(days: 2));
       final task = ChildMission(
         id: 'task-outdoor-1',
         title: 'Backyard Nature Exploration',
         description: 'Explore the garden and find 3 different leaves.',
-        category: TaskCategory.outdoor,
         targetMinutes: 30,
-        points: 50,
         reward: 'Family ice cream trip',
         dueDate: dueDate,
         proofRequirement: ProofRequirement.photo,
@@ -136,7 +206,7 @@ void main() {
       expect(saved, isNotNull);
       expect(saved!.title, equals('Backyard Nature Exploration'));
       expect(saved.description, equals('Explore the garden and find 3 different leaves.'));
-      expect(saved.category, equals(TaskCategory.outdoor));
+      expect(saved.source, equals(MissionSource.parent));
       expect(saved.targetMinutes, equals(30));
       expect(saved.reward, equals('Family ice cream trip'));
       expect(saved.proofRequirement, equals(ProofRequirement.photo));
@@ -147,12 +217,11 @@ void main() {
       expect(saved.isCompleted, isFalse);
     });
 
-    test('3. Child isolation: child only sees tasks assigned to them or unassigned family tasks', () async {
+    test('3. Child isolation: child only sees activities assigned to them or unassigned family activities', () async {
       final taskChildA = ChildMission(
         id: 't-a',
         title: 'Child A Reading',
         description: 'Read a book',
-        category: TaskCategory.learning,
         targetMinutes: 20,
         assignedToChildId: 'child-A',
       );
@@ -160,7 +229,6 @@ void main() {
         id: 't-b',
         title: 'Child B Bike Ride',
         description: 'Ride bike outdoors',
-        category: TaskCategory.exercise,
         targetMinutes: 30,
         assignedToChildId: 'child-B',
       );
@@ -185,7 +253,6 @@ void main() {
         id: 'task-family-dinner',
         title: 'Screen-Free Family Dinner',
         description: 'Enjoy dinner with family with all phones kept away.',
-        category: TaskCategory.family,
         targetMinutes: 45,
         proofRequirement: ProofRequirement.photoVideoParentApproval,
         reward: 'Pick family movie night movie',
@@ -235,7 +302,6 @@ void main() {
         id: 'task-exercise-1',
         title: '20-Minute Jump Rope',
         description: 'Practice jump roping in the backyard.',
-        category: TaskCategory.exercise,
         targetMinutes: 20,
         proofRequirement: ProofRequirement.parentApproval,
       );
@@ -270,12 +336,11 @@ void main() {
           equals(MissionStatus.approved));
     });
 
-    test('6. No-proof task completes immediately upon submission without requiring review', () async {
+    test('6. No-proof activity completes immediately upon submission without requiring review', () async {
       final task = ChildMission(
         id: 'task-chores',
         title: 'Make Your Bed',
         description: 'Tidy up your room and make your bed.',
-        category: TaskCategory.responsibility,
         targetMinutes: 10,
         proofRequirement: ProofRequirement.noProof,
       );
@@ -292,13 +357,12 @@ void main() {
       expect(completed?.completedAt, isNotNull);
     });
 
-    test('7. Expiration logic: task past due date is marked expired', () async {
+    test('7. Expiration logic: activity past due date is marked expired', () async {
       final pastDate = DateTime.now().subtract(const Duration(hours: 2));
       final task = ChildMission(
         id: 'task-expired',
         title: 'Morning Yoga',
         description: 'Do yoga before 9am',
-        category: TaskCategory.exercise,
         targetMinutes: 15,
         dueDate: pastDate,
       );
@@ -310,15 +374,13 @@ void main() {
       expect(missions.first.status, equals(MissionStatus.expired));
     });
 
-    test('8. JSON Serialization retains all real-world task fields', () {
+    test('8. JSON Serialization retains all real-world activity fields', () {
       final now = DateTime.now();
       final task = ChildMission(
         id: 'pt-json-test',
         title: 'Drawing a Comic',
         description: 'Draw a 4-panel comic about your day.',
-        category: TaskCategory.creativity,
         targetMinutes: 25,
-        points: 75,
         status: MissionStatus.submitted,
         reward: 'New sketchbook',
         dueDate: now.add(const Duration(days: 3)),
@@ -342,7 +404,7 @@ void main() {
 
       expect(reconstituted.id, equals(task.id));
       expect(reconstituted.title, equals(task.title));
-      expect(reconstituted.category, equals(TaskCategory.creativity));
+      expect(reconstituted.source, equals(MissionSource.parent));
       expect(reconstituted.reward, equals('New sketchbook'));
       expect(reconstituted.proofRequirement, equals(ProofRequirement.photoVideoParentApproval));
       expect(reconstituted.proofMediaPath, equals('/storage/DCIM/comic.jpg'));
@@ -352,25 +414,28 @@ void main() {
     });
 
     test('9. ParentDashboardController dispatches real notifications on task actions', () async {
-      final usageProvider = DemoUsageDataProvider();
+      final usageProvider = _FakeUsageProvider();
       final patternService = const PatternDetectionService();
       final goalGen = const CoachingGoalGenerator();
-      final goalRepo = InMemoryLocalGoalRepository();
+      final goalRepo = EncryptedLocalGoalRepository(store: store);
       final coachingLoop = CoachingLoopService(
         usageProvider: usageProvider,
         patternService: patternService,
         goalGenerator: goalGen,
         goalRepo: goalRepo,
+        store: store,
       );
+      await coachingLoop.loadHistory();
 
       final parentController = ParentDashboardController(
         familyRepository: TestFamilyRepository(),
         configurationRepository: TestConfigurationRepository(),
-        approvedReportRepository: InMemoryApprovedReportRepository(),
+        approvedReportRepository: EncryptedApprovedReportRepository(store: store),
         usageDataProvider: usageProvider,
         coachingLoopService: coachingLoop,
         goalRepository: goalRepo,
         missionRepository: missionRepo,
+        rewardRepository: rewardRepo,
         notificationProvider: notifBridge,
       );
 
@@ -380,7 +445,6 @@ void main() {
         childNickname: 'Alex',
         title: 'Clean the Bicycle',
         description: 'Wash and oil the bicycle chain.',
-        category: TaskCategory.responsibility,
         durationMinutes: 30,
         proofRequirement: ProofRequirement.photo,
         reward: 'Ice cream at the beach',
@@ -396,7 +460,10 @@ void main() {
     test('10. ChildMissionsController dispatches alerts and updates achievements', () async {
       final childController = ChildMissionsController(
         repository: missionRepo,
-        notificationProvider: notifBridge,
+        rewardRepository: rewardRepo,
+        taskNotifications: TaskNotificationService(
+          notificationProvider: notifBridge,
+        ),
         achievementRepository: achRepo,
       );
 
@@ -404,7 +471,6 @@ void main() {
         id: 'm-read-nature',
         title: 'Tree Identification',
         description: 'Find and photograph 2 types of trees in the park.',
-        category: TaskCategory.outdoor,
         targetMinutes: 20,
         proofRequirement: ProofRequirement.photo,
         assignedToChildId: 'child-sam',

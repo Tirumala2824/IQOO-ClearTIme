@@ -6,6 +6,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/providers/providers.dart';
 import '../../../data/models/approved_report_model.dart';
 import '../../../data/models/child_profile_model.dart';
+import '../../../services/analytics/report_request_service.dart';
 import '../controllers/parent_dashboard_controller.dart';
 
 class ParentReportsScreen extends ConsumerStatefulWidget {
@@ -33,10 +34,28 @@ class _ParentReportsScreenState extends ConsumerState<ParentReportsScreen>
     super.dispose();
   }
 
+  /// Creates a durable report request for today and shows its truthful state.
+  Future<void> _requestTodaysReport(ChildProfile child) async {
+    final service = ref.read(reportRequestServiceProvider);
+    final row = await service.requestReport(childId: child.id);
+    if (!mounted) return;
+    final status = row?['status'] as String? ?? 'failed';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          status == 'preparing' || status == 'waiting_for_child'
+              ? "Report requested for ${child.nickname}: "
+                  '${reportRequestStatusLabel(status)}.'
+              : "Report request state: ${reportRequestStatusLabel(status)}.",
+        ),
+      ),
+    );
+  }
+
   void _showReportConfigurationDialog() {
     final settingsRepo = ref.read(parentReportSettingsRepositoryProvider);
     final family = ref.read(parentDashboardControllerProvider).family;
-    final familyId = family?.id ?? 'family-1';
+    final familyId = family?.id ?? '';
 
     showModalBottomSheet(
       context: context,
@@ -510,6 +529,11 @@ class _ParentReportsScreenState extends ConsumerState<ParentReportsScreen>
                     ),
                   ),
 
+                  if (report.understandActSections.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    _buildUnderstandActCard(report),
+                  ],
+
                   if (report.insights.isNotEmpty) ...[
                     const SizedBox(height: 20),
                     Text(
@@ -682,29 +706,178 @@ class _ParentReportsScreenState extends ConsumerState<ParentReportsScreen>
     );
   }
 
+  /// Renders the Understand → Act narrative. The interpretation row is
+  /// explicitly marked as local-AI when the model produced it.
+  Widget _buildUnderstandActCard(ApprovedReport report) {
+    final sections = report.understandActSections;
+    final atAGlance = sections['at_a_glance'] as String? ?? '';
+    final whatChanged = sections['what_changed'] as String? ?? '';
+    final meaning = sections['what_it_may_mean'] as String? ?? '';
+    final isAi = sections['interpretation_is_ai_generated'] as bool? ?? false;
+    final nextSteps =
+        List<String>.from(sections['next_steps'] as List? ?? const []);
+
+    return Card(
+      color: Colors.white,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.auto_graph_rounded,
+                    size: 16, color: AppTheme.parentSecondary),
+                SizedBox(width: 6),
+                Text(
+                  'UNDERSTAND → ACT',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.parentPrimary,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _sectionRow('At a glance', atAGlance),
+            _sectionRow('What changed', whatChanged),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(
+                  width: 92,
+                  child: Text(
+                    'What it may mean',
+                    style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.neutralMuted),
+                  ),
+                ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        meaning,
+                        style: const TextStyle(fontSize: 12.5, height: 1.4),
+                      ),
+                      if (isAi)
+                        const Padding(
+                          padding: EdgeInsets.only(top: 4),
+                          child: Text(
+                            'Local-AI interpretation — grounded in the facts above.',
+                            style: TextStyle(
+                                fontSize: 10,
+                                fontStyle: FontStyle.italic,
+                                color: AppTheme.neutralMuted),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            if (nextSteps.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(
+                    width: 92,
+                    child: Text(
+                      'Helpful next steps',
+                      style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.neutralMuted),
+                    ),
+                  ),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: nextSteps
+                          .map((s) => Padding(
+                                padding: const EdgeInsets.only(bottom: 4),
+                                child: Text('• $s',
+                                    style: const TextStyle(fontSize: 12.5)),
+                              ))
+                          .toList(),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _sectionRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 92,
+            child: Text(
+              label,
+              style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: AppTheme.neutralMuted),
+            ),
+          ),
+          Expanded(
+            child:
+                Text(value, style: const TextStyle(fontSize: 12.5, height: 1.4)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final parentState = ref.watch(parentDashboardControllerProvider);
     final reportRepo = ref.watch(approvedReportRepositoryProvider);
 
     final children = parentState.children;
+
+    if (children.isEmpty) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Approved Wellbeing Reports')),
+        body: const Center(
+          child: Padding(
+            padding: EdgeInsets.all(32),
+            child: Text(
+              'No children linked to this family yet. Reports appear here '
+              'only after a child device collects activity and shares an '
+              'approved snapshot.',
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
+      );
+    }
+
     final activeChild = children.firstWhere(
       (c) => c.id == _selectedChildId,
-      orElse: () => children.isNotEmpty
-          ? children.first
-          : ChildProfile(
-              id: 'child-1',
-              nickname: 'Alex',
-              age: 12,
-              createdAt: DateTime.now(),
-              updatedAt: DateTime.now(),
-            ),
+      orElse: () => children.first,
     );
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Approved Wellbeing Reports'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.notification_add_outlined),
+            tooltip: "Request today's report",
+            onPressed: () => _requestTodaysReport(activeChild),
+          ),
           IconButton(
             icon: const Icon(Icons.compare_arrows_rounded),
             tooltip: 'Compare Reports',

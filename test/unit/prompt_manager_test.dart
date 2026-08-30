@@ -1,18 +1,34 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:cleartime/data/models/llm_models.dart';
 import 'package:cleartime/data/repositories/local_prompt_repository.dart';
+import 'package:cleartime/services/storage/encrypted_device_store.dart';
+
+import '../helpers/encrypted_store_helper.dart';
 
 void main() {
-  group('LocalPromptRepository & PromptManager Unit Tests', () {
+  group('LocalPromptRepository Unit Tests', () {
     late LocalPromptRepository repo;
+    late EncryptedDeviceStore store;
 
-    setUp(() {
-      repo = InMemoryLocalPromptRepository();
+    setUp(() async {
+      store = await createTestDeviceStore();
+      // The encrypted store starts empty and Hive boxes are process-global,
+      // so clear the boxes this suite uses for deterministic per-test state.
+      await store.clearBox(EncryptedDeviceStore.promptsBox);
+      await store.clearBox(EncryptedDeviceStore.promptVersionsBox);
+      repo = EncryptedLocalPromptRepository(store: store);
     });
 
-    test('Loads 6 default prompt categories on initialization', () async {
+    test('Saves and loads one prompt template per supported category', () async {
+      // The encrypted store starts empty: tests seed their own fixtures.
+      for (final type in PromptType.values) {
+        await repo.savePrompt(
+          samplePrompt(id: 'prompt-${type.name}', type: type),
+        );
+      }
+
       final prompts = await repo.getAllPrompts();
-      expect(prompts.length, greaterThanOrEqualTo(6));
+      expect(prompts.length, equals(6));
 
       final types = prompts.map((p) => p.type).toSet();
       expect(types, contains(PromptType.childInsight));
@@ -24,9 +40,10 @@ void main() {
     });
 
     test('Saving prompt modifications creates a new version without overwriting history', () async {
-      final initial = await repo.getPromptById('prompt-child-insight');
-      expect(initial, isNotNull);
-      expect(initial!.version, equals(1));
+      final initial = await repo.savePrompt(
+        samplePrompt(id: 'prompt-child-insight'),
+      );
+      expect(initial.version, equals(1));
 
       final updated = await repo.savePrompt(
         initial.copyWith(content: 'New modified content for {{child_name}} with {{focus_time}} focus.'),
@@ -43,8 +60,10 @@ void main() {
     });
 
     test('Rollback restores content from a previous version and appends new version entry', () async {
-      final initial = await repo.getPromptById('prompt-child-insight');
-      final originalContent = initial!.content;
+      final initial = await repo.savePrompt(
+        samplePrompt(id: 'prompt-child-insight'),
+      );
+      final originalContent = initial.content;
 
       // Edit 1 -> v2
       await repo.savePrompt(
@@ -63,6 +82,9 @@ void main() {
     });
 
     test('Duplicate prompt creates independent template with copy name and v1', () async {
+      await repo.savePrompt(
+        samplePrompt(id: 'prompt-child-mission', type: PromptType.childMission),
+      );
       final duplicated = await repo.duplicatePrompt('prompt-child-mission');
 
       expect(duplicated.id, isNot(equals('prompt-child-mission')));
@@ -75,6 +97,9 @@ void main() {
     });
 
     test('Activating a prompt marks other prompts of same type inactive', () async {
+      await repo.savePrompt(
+        samplePrompt(id: 'prompt-child-insight'),
+      );
       final duplicate = await repo.duplicatePrompt('prompt-child-insight');
       await repo.activatePrompt(duplicate.id);
 
@@ -86,14 +111,36 @@ void main() {
       expect(original?.isActive, isFalse);
     });
 
-    test('Reset to default restores original template content', () async {
+    test('Reset to default clears stored templates of that type', () async {
+      await repo.savePrompt(
+        samplePrompt(id: 'prompt-parent-report', type: PromptType.parentReport),
+      );
       final original = await repo.getPromptById('prompt-parent-report');
+      expect(original, isNotNull);
       await repo.savePrompt(
         original!.copyWith(content: 'Temporary experimental text'),
       );
 
-      final reset = await repo.resetToDefault(PromptType.parentReport);
-      expect(reset.content, contains('Analyze the approved summary facts'));
+      // resetToDefault now clears stored prompts of the type (no seeded
+      // factory content exists to restore).
+      await repo.resetToDefault(PromptType.parentReport);
+
+      expect(await repo.getPromptById('prompt-parent-report'), isNull);
+      final remaining = await repo.getAllPrompts();
+      expect(remaining.any((p) => p.type == PromptType.parentReport), isFalse);
+    });
+
+    test('Reset all defaults clears every stored prompt template', () async {
+      for (final type in PromptType.values) {
+        await repo.savePrompt(
+          samplePrompt(id: 'prompt-${type.name}', type: type),
+        );
+      }
+
+      await repo.resetAllToDefaults();
+
+      final prompts = await repo.getAllPrompts();
+      expect(prompts, isEmpty);
     });
   });
 }

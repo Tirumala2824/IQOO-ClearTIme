@@ -343,6 +343,7 @@ class ApprovedReport {
   final List<ApprovedInsight> insights;
   final String summaryText;
   final String? aiExplanation;
+  final Map<String, dynamic> understandActSections;
   final String contextVersion;
   final String privacyFilterVersion;
   final String analyticsVersion;
@@ -372,6 +373,7 @@ class ApprovedReport {
     this.insights = const [],
     required this.summaryText,
     this.aiExplanation,
+    this.understandActSections = const {},
     this.contextVersion = '1.0.0',
     this.privacyFilterVersion = '1.0.0',
     this.analyticsVersion = '1.0.0',
@@ -407,6 +409,7 @@ class ApprovedReport {
         'insights': insights.map((i) => i.toJson()).toList(),
         'summaryText': summaryText,
         'aiExplanation': aiExplanation,
+        'understand_act': understandActSections,
         'contextVersion': contextVersion,
         'privacyFilterVersion': privacyFilterVersion,
         'analyticsVersion': analyticsVersion,
@@ -444,6 +447,8 @@ class ApprovedReport {
             '',
         aiExplanation: json['aiExplanation'] as String? ??
             json['ai_explanation'] as String?,
+        understandActSections: Map<String, dynamic>.from(
+            json['understand_act'] as Map? ?? {}),
         contextVersion: json['contextVersion'] as String? ??
             json['context_version'] as String? ??
             '1.0.0',
@@ -470,6 +475,7 @@ class ApprovedReport {
     String? aiExplanation,
     List<ApprovedInsight>? insights,
     String? summaryText,
+    Map<String, dynamic>? understandActSections,
   }) {
     return ApprovedReport(
       id: id,
@@ -485,6 +491,7 @@ class ApprovedReport {
       insights: insights ?? this.insights,
       summaryText: summaryText ?? this.summaryText,
       aiExplanation: aiExplanation ?? this.aiExplanation,
+      understandActSections: understandActSections ?? this.understandActSections,
       contextVersion: contextVersion,
       privacyFilterVersion: privacyFilterVersion,
       analyticsVersion: analyticsVersion,

@@ -23,8 +23,15 @@ const regions = [
 ];
 
 async function testRegions() {
+  if (!process.env.SUPABASE_DATABASE_URL) {
+    console.error('SUPABASE_DATABASE_URL environment variable is required.');
+    process.exit(1);
+  }
   for (const r of regions) {
-    const cs = `postgresql://postgres.bmtadgpkckkgcmvnqobg:IQoobengaluru2908@aws-0-${r}.pooler.supabase.com:5432/postgres`;
+    const cs = process.env.SUPABASE_DATABASE_URL.replace(
+      'aws-0-ap-northeast-1',
+      `aws-0-${r}`,
+    );
     const client = new Client({
       connectionString: cs,
       ssl: { rejectUnauthorized: false },

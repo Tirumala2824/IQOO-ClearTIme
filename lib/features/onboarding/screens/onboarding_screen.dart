@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_routes.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/validators.dart';
+import '../../../core/providers/providers.dart';
 import '../../authentication/controllers/auth_controller.dart';
 import '../../parent/controllers/parent_dashboard_controller.dart';
 
@@ -16,7 +17,38 @@ class OnboardingScreen extends ConsumerStatefulWidget {
 
 class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _familyNameController = TextEditingController(text: 'My Family');
+  final _familyNameController = TextEditingController();
+  String? _selectedExistingFamilyId;
+
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(() => _initFamilies());
+  }
+
+  Future<void> _initFamilies() async {
+    var user = ref.read(authControllerProvider).user;
+    if (user == null) {
+      final currentAuth = ref.read(authRepositoryProvider).currentAuthUser;
+      if (currentAuth != null) {
+        user = await ref.read(authRepositoryProvider).getCurrentUserProfile();
+        if (user != null) {
+          await ref.read(authControllerProvider.notifier).setUserProfile(user);
+        }
+      }
+    }
+    if (user != null) {
+      await ref
+          .read(parentDashboardControllerProvider.notifier)
+          .loadDashboard(user.id);
+      final state = ref.read(parentDashboardControllerProvider);
+      if (state.allFamilies.isNotEmpty && mounted) {
+        setState(() {
+          _selectedExistingFamilyId = state.family?.id ?? state.allFamilies.first.id;
+        });
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -24,10 +56,41 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     super.dispose();
   }
 
+  Future<void> _handleSelectExistingFamily() async {
+    var user = ref.read(authControllerProvider).user;
+    if (user == null) {
+      final currentAuth = ref.read(authRepositoryProvider).currentAuthUser;
+      if (currentAuth != null) {
+        user = await ref.read(authRepositoryProvider).getCurrentUserProfile();
+      }
+    }
+    if (user == null || _selectedExistingFamilyId == null) return;
+
+    final parentState = ref.read(parentDashboardControllerProvider);
+    final chosenFamily = parentState.allFamilies.firstWhere(
+      (f) => f.id == _selectedExistingFamilyId,
+      orElse: () => parentState.allFamilies.first,
+    );
+
+    await ref
+        .read(parentDashboardControllerProvider.notifier)
+        .switchFamily(chosenFamily, user.id);
+
+    if (mounted) {
+      context.go(AppRoutes.parent);
+    }
+  }
+
   Future<void> _handleCreateFamily() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final user = ref.read(authControllerProvider).user;
+    var user = ref.read(authControllerProvider).user;
+    if (user == null) {
+      final currentAuth = ref.read(authRepositoryProvider).currentAuthUser;
+      if (currentAuth != null) {
+        user = await ref.read(authRepositoryProvider).getCurrentUserProfile();
+      }
+    }
     if (user == null) return;
 
     final name = _familyNameController.text.trim();
@@ -43,6 +106,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   @override
   Widget build(BuildContext context) {
     final parentState = ref.watch(parentDashboardControllerProvider);
+    final existingFamilies = parentState.allFamilies;
 
     return Scaffold(
       appBar: AppBar(
@@ -86,7 +150,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 ),
                 const SizedBox(height: 24),
                 Text(
-                  'Create Your Family Hub',
+                  existingFamilies.isNotEmpty
+                      ? 'Your Family Spaces'
+                      : 'Create Your Family Hub',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                         fontWeight: FontWeight.w700,
@@ -94,7 +160,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'As the family administrator, you can invite your children, customize report frequencies, and establish gentle digital limits.',
+                  existingFamilies.isNotEmpty
+                      ? 'Select an existing family space to manage, or create a new family hub below.'
+                      : 'As the family administrator, you can invite your children, customize report frequencies, and establish gentle digital limits.',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
@@ -114,6 +182,106 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                   ),
                   const SizedBox(height: 20),
                 ],
+
+                // EXISTING FAMILIES DROPDOWN SECTION
+                if (existingFamilies.isNotEmpty) ...[
+                  Card(
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      side: BorderSide(
+                        color: AppTheme.parentPrimary.withAlpha((0.3 * 255).round()),
+                        width: 1.5,
+                      ),
+                    ),
+                    color: AppTheme.parentPrimary.withAlpha((0.04 * 255).round()),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Row(
+                            children: const [
+                              Icon(Icons.folder_shared_rounded,
+                                  color: AppTheme.parentPrimary, size: 22),
+                              SizedBox(width: 8),
+                              Text(
+                                'Select Existing Family',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 15,
+                                  color: AppTheme.parentPrimary,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          DropdownButtonFormField<String>(
+                            initialValue: _selectedExistingFamilyId ??
+                                (existingFamilies.any((f) => f.id == parentState.family?.id)
+                                    ? parentState.family?.id
+                                    : existingFamilies.first.id),
+                            decoration: const InputDecoration(
+                              labelText: 'Active Family',
+                              prefixIcon: Icon(Icons.diversity_3_outlined),
+                              fillColor: Colors.white,
+                              filled: true,
+                            ),
+                            items: existingFamilies.map((f) {
+                              return DropdownMenuItem<String>(
+                                value: f.id,
+                                child: Text(
+                                  f.name,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                            onChanged: (val) {
+                              setState(() {
+                                _selectedExistingFamilyId = val;
+                              });
+                            },
+                          ),
+                          const SizedBox(height: 14),
+                          ElevatedButton.icon(
+                            onPressed: parentState.isLoading
+                                ? null
+                                : _handleSelectExistingFamily,
+                            icon: const Icon(Icons.arrow_forward_rounded),
+                            label: const Text('Open Selected Family'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppTheme.parentPrimary,
+                              foregroundColor: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 28),
+                  Row(
+                    children: const [
+                      Expanded(child: Divider()),
+                      Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 12.0),
+                        child: Text(
+                          'OR CREATE A NEW FAMILY SPACE',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: AppTheme.neutralMuted,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                      Expanded(child: Divider()),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                ],
+
                 TextFormField(
                   controller: _familyNameController,
                   validator: Validators.validateFamilyName,

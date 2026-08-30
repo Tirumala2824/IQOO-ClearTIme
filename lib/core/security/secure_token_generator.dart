@@ -37,17 +37,44 @@ class SecureTokenGenerator {
     });
   }
 
-  /// Parses invitation code from raw text or QR payload.
+  /// Parses invitation code from raw text, JSON QR payload, or URI.
   static String parseInvitationCode(String input) {
     final trimmed = input.trim();
-    if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+    if (trimmed.isEmpty) return '';
+
+    // 1. Check JSON payload
+    if (trimmed.contains('{') && trimmed.contains('}')) {
       try {
-        final decoded = jsonDecode(trimmed) as Map<String, dynamic>;
-        if (decoded['code'] != null) {
-          return decoded['code'].toString().toUpperCase();
+        final startIndex = trimmed.indexOf('{');
+        final endIndex = trimmed.lastIndexOf('}');
+        final jsonStr = trimmed.substring(startIndex, endIndex + 1);
+        final decoded = jsonDecode(jsonStr);
+        if (decoded is Map<String, dynamic>) {
+          if (decoded['code'] != null) {
+            return decoded['code'].toString().trim().toUpperCase();
+          }
+          if (decoded['invitation_code'] != null) {
+            return decoded['invitation_code'].toString().trim().toUpperCase();
+          }
         }
       } catch (_) {}
     }
-    return trimmed.toUpperCase();
+
+    // 2. Check URI / query param (e.g. ?code=XYZ)
+    if (trimmed.contains('code=')) {
+      final match = RegExp(r'code=([A-Za-z0-9]+)').firstMatch(trimmed);
+      if (match != null && match.group(1) != null) {
+        return match.group(1)!.toUpperCase();
+      }
+    }
+
+    // 3. Match standard 8-character base32 token
+    final tokenMatch = RegExp(r'\b[2-9A-HJ-NP-Z]{8}\b', caseSensitive: false).firstMatch(trimmed);
+    if (tokenMatch != null) {
+      return tokenMatch.group(0)!.toUpperCase();
+    }
+
+    // 4. Fallback cleanup: remove whitespace, non-alphanumeric
+    return trimmed.replaceAll(RegExp(r'[^A-Za-z0-9]'), '').toUpperCase();
   }
 }

@@ -10,9 +10,10 @@ class NativeDeviceProvider implements DeviceProvider {
   Future<String> getDeviceId() async {
     try {
       final id = await _channel.invokeMethod<String>('getDeviceId');
-      return id ?? 'dev_android_local_default';
+      return id ?? '';
     } catch (_) {
-      return 'dev_android_local_mock';
+      // No fabricated identifier: callers treat an empty id as unknown.
+      return '';
     }
   }
 
@@ -20,9 +21,9 @@ class NativeDeviceProvider implements DeviceProvider {
   Future<String> getDeviceName() async {
     try {
       final name = await _channel.invokeMethod<String>('getDeviceName');
-      return name ?? 'Android Device';
+      return name ?? '';
     } catch (_) {
-      return 'Android Device (Local)';
+      return '';
     }
   }
 
@@ -30,9 +31,9 @@ class NativeDeviceProvider implements DeviceProvider {
   Future<String> getOsVersion() async {
     try {
       final os = await _channel.invokeMethod<String>('getOsVersion');
-      return os ?? 'Android 14 (API 34)';
+      return os ?? '';
     } catch (_) {
-      return 'Android 14';
+      return '';
     }
   }
 
@@ -40,9 +41,9 @@ class NativeDeviceProvider implements DeviceProvider {
   Future<String> getClientVersion() async {
     try {
       final v = await _channel.invokeMethod<String>('getClientVersion');
-      return v ?? '1.0.0+1';
+      return v ?? '';
     } catch (_) {
-      return '1.0.0';
+      return '';
     }
   }
 

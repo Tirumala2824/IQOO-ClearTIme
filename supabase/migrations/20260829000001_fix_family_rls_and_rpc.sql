@@ -64,7 +64,7 @@ BEGIN
     -- Default Notification Preferences
     INSERT INTO public.notification_preferences (family_id, user_id, daily_summary, instant_alerts, quiet_hours_start, quiet_hours_end)
     VALUES (NEW.id, NEW.admin_user_id, true, true, '21:00', '07:00')
-    ON CONFLICT (family_id, user_id) DO NOTHING;
+    ON CONFLICT (user_id) DO UPDATE SET family_id = EXCLUDED.family_id, updated_at = NOW();
 
     RETURN NEW;
 END;

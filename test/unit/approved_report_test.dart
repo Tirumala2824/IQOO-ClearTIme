@@ -4,14 +4,18 @@ import 'package:cleartime/data/models/usage_models.dart';
 import 'package:cleartime/services/analytics/child_report_builder.dart';
 import 'package:cleartime/data/repositories/approved_report_repository.dart';
 
+import '../helpers/encrypted_store_helper.dart';
+
 void main() {
   group('ApprovedReport & ChildReportBuilder Unit Tests', () {
     late ChildReportBuilder builder;
     late ApprovedReportRepository reportRepo;
 
-    setUp(() {
+    setUp(() async {
       builder = const ChildReportBuilder();
-      reportRepo = InMemoryApprovedReportRepository(seedSampleData: false);
+      final store = await createTestDeviceStore();
+      reportRepo = EncryptedApprovedReportRepository(store: store);
+      await reportRepo.clearLocalCache();
     });
 
     test('buildDailyReport generates deterministic facts from daily analytics', () {
@@ -117,6 +121,38 @@ void main() {
       expect(report.facts.focusMinutes, equals(900));
     });
 
+    test('buildApprovedSnapshot attaches Understand→Act sections', () {
+      final report = builder.buildApprovedSnapshot(
+        childId: 'child-1',
+        childNickname: 'Alex',
+        familyId: 'family-1',
+        period: ReportPeriod.weekly,
+        periodStart: DateTime(2026, 8, 22),
+        periodEnd: DateTime(2026, 8, 29),
+        facts: const ReportFacts(
+          totalScreenMinutes: 600,
+          focusMinutes: 200,
+          breakCount: 10,
+        ),
+        understandActSections: const {
+          'at_a_glance': '10h total device time',
+          'what_changed': 'up 2h',
+          'what_it_may_mean': 'No local interpretation available.',
+          'next_steps': ['Take a short break after 30 minutes.'],
+        },
+      );
+
+      expect(report.isSnapshot, isTrue);
+      expect(report.period, equals(ReportPeriod.weekly));
+      expect(report.understandActSections['at_a_glance'],
+          equals('10h total device time'));
+      expect(report.facts.totalScreenMinutes, equals(600));
+
+      final copied = report.copyWith(summaryText: 'Updated summary');
+      expect(copied.summaryText, equals('Updated summary'));
+      expect(copied.understandActSections, equals(report.understandActSections));
+    });
+
     test('ApprovedReport JSON serialization and deserialization retains all fields', () {
       final now = DateTime(2026, 8, 29, 12, 0, 0);
       final report = ApprovedReport(
@@ -135,6 +171,10 @@ void main() {
           categoryBreakdown: {'Learning': 200, 'Other': 400},
         ),
         summaryText: 'Weekly summary text',
+        understandActSections: const {
+          'at_a_glance': '10h total device time',
+          'next_steps': ['Take a short break after 30 minutes.'],
+        },
         createdAt: now,
         isSnapshot: true,
       );
@@ -149,6 +189,10 @@ void main() {
       expect(fromJson.facts.focusMinutes, equals(200));
       expect(fromJson.facts.breakCount, equals(10));
       expect(fromJson.facts.categoryBreakdown['Learning'], equals(200));
+      expect(fromJson.understandActSections['at_a_glance'],
+          equals('10h total device time'));
+      expect(fromJson.understandActSections['next_steps'],
+          contains('Take a short break after 30 minutes.'));
     });
 
     test('Multi-child isolation: Child A reports never leak under Child B query', () async {

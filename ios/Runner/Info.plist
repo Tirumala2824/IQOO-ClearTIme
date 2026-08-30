@@ -26,6 +26,10 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>ClearTime uses the camera only when you explicitly capture photo or video proof for an activity.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>ClearTime uses the microphone only when you record video proof for an activity.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

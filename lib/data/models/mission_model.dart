@@ -6,18 +6,19 @@ enum MissionStatus {
   needsRetry,
   expired;
 
+  /// Plain activity status language. No gamified terms.
   String get label {
     switch (this) {
       case MissionStatus.assigned:
-        return 'Assigned';
+        return 'To do';
       case MissionStatus.started:
-        return 'In Progress';
+        return 'In progress';
       case MissionStatus.submitted:
-        return 'Submitted';
+        return 'Sent for review';
       case MissionStatus.approved:
-        return 'Approved';
+        return 'Finished';
       case MissionStatus.needsRetry:
-        return 'Needs Retry';
+        return 'Try again';
       case MissionStatus.expired:
         return 'Expired';
     }
@@ -28,6 +29,7 @@ enum MissionStatus {
     if (name == 'available') return MissionStatus.assigned;
     if (name == 'inProgress') return MissionStatus.started;
     if (name == 'completed') return MissionStatus.approved;
+    if (name == 'needsRetry') return MissionStatus.needsRetry;
     if (name == 'needs_retry') return MissionStatus.needsRetry;
     return MissionStatus.values.firstWhere(
       (s) => s.name == name,
@@ -72,28 +74,15 @@ enum ProofRequirement {
   }
 }
 
-class TaskCategory {
-  static const String outdoor = 'Outdoor';
-  static const String family = 'Family';
-  static const String exercise = 'Exercise';
-  static const String learning = 'Learning';
-  static const String creativity = 'Creativity';
-  static const String responsibility = 'Responsibility';
-  static const String screenFree = 'Screen-free';
-
-  static const List<String> all = [
-    outdoor,
-    family,
-    exercise,
-    learning,
-    creativity,
-    responsibility,
-    screenFree,
-  ];
+/// Where an activity came from: a linked parent or the child device's local AI.
+enum MissionSource {
+  parent,
+  localAi,
 }
 
 enum MissionType {
   parentAssigned,
+  localAi,
   focus,
   breakMission,
   reading,
@@ -104,11 +93,10 @@ class ChildMission {
   final String id;
   final String title;
   final String description;
-  final String category;
+  final MissionSource source;
   final MissionType type;
   final int targetMinutes;
   final int currentMinutes;
-  final int points;
   final MissionStatus status;
   final String? reward;
   final DateTime? dueDate;
@@ -130,11 +118,10 @@ class ChildMission {
     required this.id,
     required this.title,
     required this.description,
-    required this.category,
+    this.source = MissionSource.parent,
     this.type = MissionType.parentAssigned,
     required this.targetMinutes,
     this.currentMinutes = 0,
-    this.points = 50,
     this.status = MissionStatus.assigned,
     this.reward,
     this.dueDate,
@@ -184,11 +171,10 @@ class ChildMission {
     String? id,
     String? title,
     String? description,
-    String? category,
+    MissionSource? source,
     MissionType? type,
     int? targetMinutes,
     int? currentMinutes,
-    int? points,
     MissionStatus? status,
     String? reward,
     DateTime? dueDate,
@@ -210,11 +196,10 @@ class ChildMission {
       id: id ?? this.id,
       title: title ?? this.title,
       description: description ?? this.description,
-      category: category ?? this.category,
+      source: source ?? this.source,
       type: type ?? this.type,
       targetMinutes: targetMinutes ?? this.targetMinutes,
       currentMinutes: currentMinutes ?? this.currentMinutes,
-      points: points ?? this.points,
       status: status ?? this.status,
       reward: reward ?? this.reward,
       dueDate: dueDate ?? this.dueDate,
@@ -239,11 +224,10 @@ class ChildMission {
         'id': id,
         'title': title,
         'description': description,
-        'category': category,
+        'source': source.name,
         'type': type.name,
         'targetMinutes': targetMinutes,
         'currentMinutes': currentMinutes,
-        'points': points,
         'status': status.name,
         'reward': reward,
         'dueDate': dueDate?.toIso8601String(),
@@ -265,15 +249,21 @@ class ChildMission {
   factory ChildMission.fromJson(Map<String, dynamic> json) => ChildMission(
         id: json['id'] as String,
         title: json['title'] as String,
-        description: json['description'] as String,
-        category: json['category'] as String,
+        description: json['description'] as String? ?? '',
+        source: json['source'] != null
+            ? MissionSource.values.firstWhere(
+                (s) => s.name == json['source'],
+                orElse: () => MissionSource.parent,
+              )
+            : (json['type'] == MissionType.localAi.name
+                ? MissionSource.localAi
+                : MissionSource.parent),
         type: MissionType.values.firstWhere(
           (t) => t.name == json['type'],
           orElse: () => MissionType.parentAssigned,
         ),
-        targetMinutes: (json['targetMinutes'] as num).toInt(),
+        targetMinutes: (json['targetMinutes'] as num? ?? 1).toInt(),
         currentMinutes: (json['currentMinutes'] as num? ?? 0).toInt(),
-        points: (json['points'] as num? ?? 50).toInt(),
         status: MissionStatus.fromString(json['status'] as String?),
         reward: json['reward'] as String?,
         dueDate: json['dueDate'] != null

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/mission_model.dart';
+import '../../shared/widgets/task_proof_review.dart';
 import '../controllers/parent_dashboard_controller.dart';
 import 'parent_create_task_dialog.dart';
 
@@ -130,8 +131,8 @@ class _ParentTasksScreenState extends ConsumerState<ParentTasksScreen>
             TextField(
               controller: feedbackController,
               decoration: const InputDecoration(
-                labelText: 'Feedback for child *',
-                hintText: 'e.g. Please spend 15 more minutes or upload a clearer photo',
+                labelText: 'Reason (optional)',
+                hintText: 'e.g. Please spend 15 more minutes or add a clearer photo',
               ),
             ),
           ],
@@ -147,11 +148,12 @@ class _ParentTasksScreenState extends ConsumerState<ParentTasksScreen>
               foregroundColor: Colors.white,
             ),
             onPressed: () {
+              // A reason is optional per the retry flow; only a
+              // parent-provided reason is stored and shown to the child.
               final text = feedbackController.text.trim();
-              if (text.isEmpty) return;
               ref
                   .read(parentDashboardControllerProvider.notifier)
-                  .requestTaskRetry(task.id, feedback: text);
+                  .requestTaskRetry(task.id, feedback: text.isEmpty ? null : text);
               Navigator.pop(ctx);
             },
             child: const Text('Request Retry'),
@@ -403,7 +405,7 @@ class _ParentTasksScreenState extends ConsumerState<ParentTasksScreen>
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
-                        task.category,
+                        '${task.targetMinutes} min',
                         style: const TextStyle(
                           color: AppTheme.parentPrimary,
                           fontSize: 11,
@@ -560,41 +562,13 @@ class _ParentTasksScreenState extends ConsumerState<ParentTasksScreen>
                         ),
                       ),
                     ],
-                    if (task.proofMediaPath != null &&
-                        task.proofMediaPath!.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: AppTheme.neutralBorder),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              task.proofMediaType == 'video'
-                                  ? Icons.videocam_rounded
-                                  : Icons.photo_rounded,
-                              size: 20,
-                              color: AppTheme.parentPrimary,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                task.proofMediaPath!,
-                                style: const TextStyle(
-                                  fontSize: 11.5,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                    // Real proof preview — or a truthful "No proof
+                    // submitted" state when the child submitted none.
+                    const SizedBox(height: 8),
+                    TaskProofReview(
+                      mediaPath: task.proofMediaPath,
+                      mediaType: task.proofMediaType,
+                    ),
                   ],
                 ),
               ),

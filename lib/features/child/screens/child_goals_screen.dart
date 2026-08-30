@@ -42,7 +42,7 @@ class _ChildGoalsScreenState extends ConsumerState<ChildGoalsScreen>
         backgroundColor: AppTheme.childSurface,
         elevation: 0,
         title: const Text(
-          'Goals & Quests 🎯',
+          'Goals & Activities 🎯',
           style: TextStyle(
             fontWeight: FontWeight.w800,
             fontSize: 22,
@@ -118,12 +118,12 @@ class _ChildGoalsScreenState extends ConsumerState<ChildGoalsScreen>
 
                       const SizedBox(height: 24),
 
-                      // Daily Quests / Missions Section
+                      // Daily Activities Section
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           const Text(
-                            'Real-World Offline Missions',
+                            'Activities',
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w800,
@@ -187,7 +187,7 @@ class _ChildGoalsScreenState extends ConsumerState<ChildGoalsScreen>
                                               BorderRadius.circular(8),
                                         ),
                                         child: Text(
-                                          mission.category,
+                                          '${mission.targetMinutes} min',
                                           style: const TextStyle(
                                             color: AppTheme.childPrimary,
                                             fontSize: 11,
@@ -205,7 +205,7 @@ class _ChildGoalsScreenState extends ConsumerState<ChildGoalsScreen>
                                               BorderRadius.circular(10),
                                         ),
                                         child: Text(
-                                          '+${mission.points} XP',
+                                          mission.status.label,
                                           style: const TextStyle(
                                             color: AppTheme.warningOrange,
                                             fontWeight: FontWeight.bold,
@@ -361,7 +361,7 @@ class _ChildGoalsScreenState extends ConsumerState<ChildGoalsScreen>
                         _buildEmptyCard(
                           icon: Icons.emoji_events_outlined,
                           title: 'No completed goals yet',
-                          subtitle: 'Complete goals and daily quests to build your achievement history!',
+                          subtitle: 'Complete goals and activities to build your habit history!',
                         )
                       else
                         ...historyGoals.map((goal) => _buildGoalCard(context, ref, goal)),

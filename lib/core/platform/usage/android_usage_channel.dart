@@ -1,6 +1,15 @@
 import 'package:flutter/services.dart';
 import '../../../data/models/usage_models.dart';
 
+/// Raised when the native usage bridge reports a collection failure.
+class UsageChannelException implements Exception {
+  final String message;
+  const UsageChannelException(this.message);
+
+  @override
+  String toString() => 'UsageChannelException: $message';
+}
+
 /// Dart bridge to Android native UsageStatsManager.
 class AndroidUsageChannel {
   static const MethodChannel _channel =
@@ -33,34 +42,53 @@ class AndroidUsageChannel {
   }
 
   /// Fetches aggregated usage data for today.
+  /// Throws [UsageChannelException] when collection fails instead of
+  /// returning an all-zero map.
   Future<Map<String, dynamic>> getTodayUsageData() async {
-    try {
-      final Map<dynamic, dynamic>? result =
-          await _channel.invokeMethod<Map<dynamic, dynamic>>('getTodayUsage');
-      if (result == null) return {};
-      return Map<String, dynamic>.from(result);
-    } on PlatformException catch (_) {
-      return {};
-    } catch (_) {
-      return {};
-    }
+    return _invokeMap('getTodayUsage');
   }
 
   /// Fetches aggregated usage data for a specific time range in millis.
   Future<Map<String, dynamic>> getUsageRange(
       int startTimeMs, int endTimeMs) async {
+    return _invokeMap('getUsageRange', {
+      'startTime': startTimeMs,
+      'endTime': endTimeMs,
+    });
+  }
+
+  /// Real per-day aggregates for the most recent [days] days, oldest first.
+  Future<List<Map<String, dynamic>>> getDailyBuckets(int days) async {
+    try {
+      final List<dynamic>? result = await _channel
+          .invokeMethod<List<dynamic>>('getDailyBuckets', {'days': days});
+      if (result == null) {
+        throw const UsageChannelException('No data returned by usage service.');
+      }
+      return result
+          .map((item) => Map<String, dynamic>.from(item as Map))
+          .toList();
+    } on PlatformException catch (e) {
+      throw UsageChannelException(e.message ?? 'Usage collection failed.');
+    }
+  }
+
+  Future<Map<String, dynamic>> _invokeMap(
+    String method, [
+    Map<String, dynamic>? arguments,
+  ]) async {
     try {
       final Map<dynamic, dynamic>? result =
           await _channel.invokeMethod<Map<dynamic, dynamic>>(
-        'getUsageRange',
-        {'startTime': startTimeMs, 'endTime': endTimeMs},
+        method,
+        arguments,
       );
-      if (result == null) return {};
+      if (result == null) {
+        throw const UsageChannelException('Usage collection returned no data.');
+      }
       return Map<String, dynamic>.from(result);
-    } on PlatformException catch (_) {
-      return {};
-    } catch (_) {
-      return {};
+    } on PlatformException catch (e) {
+      throw UsageChannelException(e.message ?? 'Usage collection failed.');
     }
   }
 

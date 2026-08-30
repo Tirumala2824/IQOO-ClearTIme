@@ -31,6 +31,7 @@ import '../../features/child/screens/child_goals_screen.dart';
 import '../../features/child/screens/child_progress_screen.dart';
 import '../../features/child/screens/child_ai_screen.dart';
 import '../../features/child/screens/child_settings_screen.dart';
+import '../../features/child/screens/usage_access_setup_screen.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
@@ -128,6 +129,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.childAiSettings,
         builder: (context, state) => const LocalAiSettingsScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.usageAccessSetup,
+        builder: (context, state) => const UsageAccessSetupScreen(),
       ),
 
       // Parent Navigation Shell

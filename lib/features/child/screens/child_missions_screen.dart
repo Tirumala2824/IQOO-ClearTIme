@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../data/models/reward_model.dart';
+import '../controllers/child_dashboard_controller.dart';
 import '../controllers/child_missions_controller.dart';
 import 'child_task_submission_dialog.dart';
 
@@ -16,7 +18,26 @@ class ChildMissionsScreen extends ConsumerWidget {
       backgroundColor: AppTheme.childSurface,
       appBar: AppBar(
         backgroundColor: AppTheme.childSurface,
-        title: const Text('Real-World Missions 🎯'),
+        title: const Text('My Activities'),
+        actions: [
+          IconButton(
+            tooltip: 'Suggest an AI activity from today\'s usage',
+            icon: const Icon(Icons.auto_awesome_rounded),
+            onPressed: () async {
+              final message = await ref
+                  .read(childDashboardControllerProvider.notifier)
+                  .generateAiActivity();
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(message)),
+                );
+                await ref
+                    .read(childMissionsControllerProvider.notifier)
+                    .loadMissions();
+              }
+            },
+          ),
+        ],
       ),
       body: missionsState.isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -42,7 +63,7 @@ class ChildMissionsScreen extends ConsumerWidget {
                         ),
                         const SizedBox(height: 18),
                         Text(
-                          'No missions yet',
+                          'No activities yet',
                           style:
                               Theme.of(context).textTheme.titleLarge?.copyWith(
                                     fontWeight: FontWeight.bold,
@@ -50,7 +71,7 @@ class ChildMissionsScreen extends ConsumerWidget {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Your parent hasn\'t assigned a new mission. Go play outside, read a book, or spend time with family!',
+                          'Your parent hasn\'t assigned an activity yet. Go play outside, read a book, or spend time with family!',
                           textAlign: TextAlign.center,
                           style:
                               Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -63,8 +84,14 @@ class ChildMissionsScreen extends ConsumerWidget {
                 )
               : ListView.builder(
                   padding: const EdgeInsets.all(16.0),
-                  itemCount: missions.length,
+                  // Real rewards from persisted state are appended after the
+                  // missions; nothing is fabricated when no reward exists.
+                  itemCount: missions.length +
+                      (missionsState.rewards.isEmpty ? 0 : 1),
                   itemBuilder: (context, index) {
+                    if (index >= missions.length) {
+                      return _buildRewardsSection(context, ref, missionsState.rewards);
+                    }
                     final mission = missions[index];
                     final isDone = mission.isCompleted;
                     final isPending = mission.isPendingApproval;
@@ -100,7 +127,7 @@ class ChildMissionsScreen extends ConsumerWidget {
                                     borderRadius: BorderRadius.circular(8),
                                   ),
                                   child: Text(
-                                    mission.category,
+                                    '${mission.targetMinutes} min',
                                     style: const TextStyle(
                                       color: AppTheme.childPrimary,
                                       fontSize: 11,
@@ -117,7 +144,7 @@ class ChildMissionsScreen extends ConsumerWidget {
                                     borderRadius: BorderRadius.circular(10),
                                   ),
                                   child: Text(
-                                    '+${mission.points} XP',
+                                    mission.status.label,
                                     style: const TextStyle(
                                       color: AppTheme.warningOrange,
                                       fontWeight: FontWeight.bold,
@@ -253,5 +280,125 @@ class ChildMissionsScreen extends ConsumerWidget {
                   },
                 ),
     );
+  }
+
+  /// Renders the child's real rewards from persisted state. Status chips
+  /// reflect the actual reward lifecycle; redemption only happens through
+  /// an explicit child action. Nothing is shown when no reward exists.
+  Widget _buildRewardsSection(
+    BuildContext context,
+    WidgetRef ref,
+    List<Reward> rewards,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 8),
+        Text(
+          'My Rewards 🎁',
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+        ),
+        const SizedBox(height: 10),
+        ...rewards.map((reward) => Card(
+              margin: const EdgeInsets.only(bottom: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: _rewardColor(reward.status)
+                            .withAlpha((0.15 * 255).round()),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        reward.status == RewardStatus.redeemed
+                            ? Icons.celebration_rounded
+                            : Icons.card_giftcard_rounded,
+                        color: _rewardColor(reward.status),
+                        size: 22,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            reward.title,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                          Text(
+                            _rewardStatusLabel(reward.status),
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: _rewardColor(reward.status),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (reward.status == RewardStatus.unlocked)
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.childSecondary,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 6),
+                        ),
+                        onPressed: () {
+                          // Real redemption action by the child/family.
+                          ref
+                              .read(childMissionsControllerProvider.notifier)
+                              .redeemReward(reward.id);
+                        },
+                        child: const Text('Enjoy it together! 🎉',
+                            style: TextStyle(fontSize: 12)),
+                      ),
+                  ],
+                ),
+              ),
+            )),
+      ],
+    );
+  }
+
+  Color _rewardColor(RewardStatus status) {
+    switch (status) {
+      case RewardStatus.locked:
+        return AppTheme.neutralMuted;
+      case RewardStatus.unlocked:
+        return AppTheme.childSecondary;
+      case RewardStatus.redeemed:
+        return AppTheme.successGreen;
+      case RewardStatus.cancelled:
+        return AppTheme.alertRed;
+    }
+  }
+
+  String _rewardStatusLabel(RewardStatus status) {
+    switch (status) {
+      case RewardStatus.locked:
+        return 'Locked — finish your mission to unlock';
+      case RewardStatus.unlocked:
+        return 'Unlocked! Enjoy it together.';
+      case RewardStatus.redeemed:
+        return 'Redeemed — hope you enjoyed it!';
+      case RewardStatus.cancelled:
+        return 'Cancelled';
+    }
   }
 }

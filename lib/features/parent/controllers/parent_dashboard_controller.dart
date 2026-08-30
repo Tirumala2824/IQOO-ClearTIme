@@ -17,12 +17,17 @@ import '../../../data/models/approved_report_model.dart';
 import '../../../data/repositories/approved_report_repository.dart';
 import '../../../data/repositories/local_goal_repository.dart';
 import '../../../data/repositories/local_mission_repository.dart';
+import '../../../data/repositories/local_reward_repository.dart';
 import '../../../core/services/abstractions/usage_data_provider.dart';
 import '../../../core/services/abstractions/notification_provider.dart';
+import '../../../core/services/task_notification_service.dart';
+import '../../../data/models/reward_model.dart';
 import '../../../services/coaching/coaching_loop_service.dart';
+import '../../../services/realtime/mission_realtime_service.dart';
 
 class ParentDashboardState {
   final Family? family;
+  final List<Family> allFamilies;
   final List<ChildProfile> children;
   final List<ReportConfiguration> reports;
   final List<TriggerConfiguration> triggers;
@@ -35,11 +40,13 @@ class ParentDashboardState {
   final CoachingHistory coachingHistory;
   final List<ChildGoal> childGoals;
   final List<ChildMission> parentTasks;
+  final List<Reward> rewards;
   final bool isLoading;
   final String? errorMessage;
 
   const ParentDashboardState({
     this.family,
+    this.allFamilies = const [],
     this.children = const [],
     this.reports = const [],
     this.triggers = const [],
@@ -52,6 +59,7 @@ class ParentDashboardState {
     this.coachingHistory = const CoachingHistory(),
     this.childGoals = const [],
     this.parentTasks = const [],
+    this.rewards = const [],
     this.isLoading = false,
     this.errorMessage,
   });
@@ -76,6 +84,7 @@ class ParentDashboardState {
 
   ParentDashboardState copyWith({
     Family? family,
+    List<Family>? allFamilies,
     List<ChildProfile>? children,
     List<ReportConfiguration>? reports,
     List<TriggerConfiguration>? triggers,
@@ -88,12 +97,14 @@ class ParentDashboardState {
     CoachingHistory? coachingHistory,
     List<ChildGoal>? childGoals,
     List<ChildMission>? parentTasks,
+    List<Reward>? rewards,
     bool? isLoading,
     String? errorMessage,
     bool clearError = false,
   }) {
     return ParentDashboardState(
       family: family ?? this.family,
+      allFamilies: allFamilies ?? this.allFamilies,
       children: children ?? this.children,
       reports: reports ?? this.reports,
       triggers: triggers ?? this.triggers,
@@ -107,6 +118,7 @@ class ParentDashboardState {
       coachingHistory: coachingHistory ?? this.coachingHistory,
       childGoals: childGoals ?? this.childGoals,
       parentTasks: parentTasks ?? this.parentTasks,
+      rewards: rewards ?? this.rewards,
       isLoading: isLoading ?? this.isLoading,
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
     );
@@ -121,7 +133,10 @@ class ParentDashboardController extends StateNotifier<ParentDashboardState> {
   final CoachingLoopService _coachingLoopService;
   final LocalGoalRepository _goalRepository;
   final LocalMissionRepository _missionRepository;
-  final NotificationProvider _notificationProvider;
+  final RewardRepository _rewardRepository;
+  final TaskNotificationService _taskNotifications;
+  final MissionRealtimeService? _realtimeService;
+  bool _realtimeSubscribed = false;
 
   ParentDashboardController({
     required FamilyRepository familyRepository,
@@ -131,7 +146,9 @@ class ParentDashboardController extends StateNotifier<ParentDashboardState> {
     required CoachingLoopService coachingLoopService,
     required LocalGoalRepository goalRepository,
     required LocalMissionRepository missionRepository,
+    required RewardRepository rewardRepository,
     required NotificationProvider notificationProvider,
+    MissionRealtimeService? realtimeService,
   })  : _familyRepository = familyRepository,
         _configurationRepository = configurationRepository,
         _approvedReportRepository = approvedReportRepository,
@@ -139,15 +156,31 @@ class ParentDashboardController extends StateNotifier<ParentDashboardState> {
         _coachingLoopService = coachingLoopService,
         _goalRepository = goalRepository,
         _missionRepository = missionRepository,
-        _notificationProvider = notificationProvider,
+        _rewardRepository = rewardRepository,
+        _realtimeService = realtimeService,
+        _taskNotifications = TaskNotificationService(
+          notificationProvider: notificationProvider,
+        ),
         super(const ParentDashboardState());
 
-  Future<void> loadDashboard(String userId) async {
+  Future<void> loadDashboard(String userId, {Family? forceFamily}) async {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
-      final family = await _familyRepository.getFamilyForUser(userId);
+      final allFamilies = await _familyRepository.getAllFamiliesForUser(userId);
+      final family = forceFamily ??
+          (state.family != null && allFamilies.any((f) => f.id == state.family!.id)
+              ? allFamilies.firstWhere((f) => f.id == state.family!.id)
+              : (allFamilies.isNotEmpty
+                  ? allFamilies.first
+                  : await _familyRepository.getFamilyForUser(userId)));
+
       if (family == null) {
-        state = state.copyWith(isLoading: false, family: null, children: []);
+        state = state.copyWith(
+          isLoading: false,
+          family: null,
+          allFamilies: allFamilies,
+          children: [],
+        );
         return;
       }
 
@@ -176,48 +209,43 @@ class ParentDashboardController extends StateNotifier<ParentDashboardState> {
       // Load live child usage and coaching loop status
       final Map<String, UsageSummary> usageMap = {};
       final Map<String, CoachingSession?> sessionMap = {};
-      final todayUsage = await _usageDataProvider.getTodayUsage();
-      final latestSession = _coachingLoopService.getTodaySession();
-      final history = _coachingLoopService.getCoachingHistory();
+
+      UsageSummary todayUsage = const UsageSummary(
+        totalMinutes: 0,
+        focusMinutes: 0,
+        breakCount: 0,
+      );
+      try {
+        todayUsage = await _usageDataProvider.getTodayUsage();
+      } catch (_) {
+        // Usage access is child-device specific; parent devices gracefully default to 0.
+      }
+
+      CoachingSession? latestSession;
+      try {
+        latestSession = _coachingLoopService.getTodaySession();
+      } catch (_) {}
+
+      CoachingHistory history = const CoachingHistory();
+      try {
+        history = _coachingLoopService.getCoachingHistory();
+      } catch (_) {}
+
       final goals = await _goalRepository.getGoals();
-      final tasks = await _missionRepository.getMissionsForParent(parentId: userId);
+      final tasks = await _missionRepository.getMissionsForParent(
+        parentId: userId,
+        familyId: family.id,
+      );
+      final rewards = await _rewardRepository.getRewardsForParent(userId);
 
       for (final child in children) {
         usageMap[child.id] = todayUsage;
         sessionMap[child.id] = latestSession;
       }
 
-      // If no approved reports yet in memory, create reports based on usage
-      if (allReports.isEmpty && children.isNotEmpty) {
-        final now = DateTime.now();
-        for (final child in children) {
-          final defaultReport = ApprovedReport(
-            id: 'rep-init-${child.id}',
-            childId: child.id,
-            childNickname: child.nickname,
-            familyId: family.id,
-            period: ReportPeriod.weekly,
-            periodStart: now.subtract(const Duration(days: 7)),
-            periodEnd: now,
-            facts: ReportFacts(
-              totalScreenMinutes: todayUsage.totalMinutes * 7,
-              focusMinutes: todayUsage.focusMinutes * 7,
-              breakCount: todayUsage.breakCount * 7,
-              goalsCompletedCount: 4,
-              goalsTotalCount: 5,
-              changePercentage: todayUsage.changePercentageFromYesterday,
-            ),
-            summaryText:
-                'Healthy screen-time balance with ${todayUsage.focusMinutes}m daily focus average and active coaching progression.',
-            createdAt: now,
-          );
-          await _approvedReportRepository.saveApprovedReport(defaultReport);
-          allReports.add(defaultReport);
-        }
-      }
-
       state = state.copyWith(
         family: family,
+        allFamilies: allFamilies,
         children: children,
         reports: reports,
         triggers: triggers,
@@ -230,11 +258,33 @@ class ParentDashboardController extends StateNotifier<ParentDashboardState> {
         coachingHistory: history,
         childGoals: goals,
         parentTasks: tasks,
+        rewards: rewards,
         isLoading: false,
       );
+
+      _subscribeRealtime(family.id, userId);
     } catch (e) {
       state = state.copyWith(isLoading: false, errorMessage: e.toString());
     }
+  }
+
+  Future<void> switchFamily(Family newFamily, String userId) async {
+    await loadDashboard(userId, forceFamily: newFamily);
+  }
+
+  /// Refreshes parent task state when the child starts or submits an
+  /// activity anywhere, so cross-device visibility is immediate.
+  void _subscribeRealtime(String familyId, String userId) {
+    final realtime = _realtimeService;
+    if (realtime == null || _realtimeSubscribed) return;
+    _realtimeSubscribed = true;
+
+    realtime.subscribeToFamilyMissionChanges(
+      familyId: familyId,
+      onRefresh: () {
+        if (!state.isLoading) loadDashboard(userId);
+      },
+    );
   }
 
   Future<bool> createParentTask({
@@ -243,23 +293,19 @@ class ParentDashboardController extends StateNotifier<ParentDashboardState> {
     required String childNickname,
     required String title,
     required String description,
-    required String category,
     required int durationMinutes,
     DateTime? dueDate,
     required ProofRequirement proofRequirement,
     String? reward,
-    int points = 50,
   }) async {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
       final task = ChildMission(
-        id: 'pt-${const Uuid().v4()}',
+        id: 'pt-${const Uuid().v4()}', // placeholder; canonical id comes back
         title: title.trim(),
         description: description.trim(),
-        category: category,
         type: MissionType.parentAssigned,
         targetMinutes: durationMinutes,
-        points: points,
         status: MissionStatus.assigned,
         reward: reward?.trim().isNotEmpty == true ? reward!.trim() : null,
         dueDate: dueDate,
@@ -270,22 +316,40 @@ class ParentDashboardController extends StateNotifier<ParentDashboardState> {
         createdAt: DateTime.now(),
       );
 
-      await _missionRepository.createParentTask(task);
+      // The RPC returns the canonical database mission; use it as the
+      // single source of truth for the id on both reward and notification.
+      final createdTask = await _missionRepository.createParentTask(task);
+
+      // Persist a real reward in [locked] state when the parent configured
+      // one. It is never unlocked at creation time; unlocking is a business
+      // event that happens only on approval (or approved auto-completion).
+      if (reward != null && reward.trim().isNotEmpty) {
+        await _rewardRepository.createReward(Reward(
+          id: 'rw-${createdTask.id}',
+          parentId: parentUserId,
+          childId: childId,
+          taskId: createdTask.id,
+          title: reward.trim(),
+        ));
+      }
+
       final updatedTasks = await _missionRepository.getMissionsForParent(
         parentId: parentUserId,
+        familyId: state.family?.id,
+      );
+      final updatedRewards = await _rewardRepository.getRewardsForParent(
+        parentUserId,
       );
 
       state = state.copyWith(
         parentTasks: updatedTasks,
+        rewards: updatedRewards,
         isLoading: false,
       );
 
-      // Send gentle notification to the child
-      await _notificationProvider.showChildWellbeingNotification(
-        id: task.id.hashCode.abs(),
-        title: 'New Offline Mission! 🎯',
-        body: 'Your parent assigned: "$title"${reward != null ? " (Reward: $reward)" : ""}',
-      );
+      // [NEW_TASK] is generated only after the task assignment succeeded.
+      // If persistence had failed above, we would never reach this line.
+      await _taskNotifications.notifyNewTask(createdTask);
 
       return true;
     } catch (e) {
@@ -298,36 +362,60 @@ class ParentDashboardController extends StateNotifier<ParentDashboardState> {
     try {
       final task = await _missionRepository.getMissionById(taskId);
       await _missionRepository.approveMission(taskId, parentFeedback: feedback);
-      final updatedTasks = await _missionRepository.getMissionsForParent();
-      state = state.copyWith(parentTasks: updatedTasks);
+
+      // The unlock condition (parent approval of a submitted task) is now
+      // satisfied: transition the real reward [locked] -> [unlocked].
+      Reward? unlockedReward;
+      if (task != null) {
+        final reward = await _rewardRepository.getRewardForTask(taskId);
+        if (reward != null && reward.isLocked) {
+          unlockedReward = await _rewardRepository.unlockReward(reward.id);
+        }
+      }
+
+      final updatedTasks = await _missionRepository.getMissionsForParent(
+        parentId: task?.assignedByParentId,
+      );
+      final updatedRewards = task?.assignedByParentId == null
+          ? state.rewards
+          : await _rewardRepository.getRewardsForParent(task!.assignedByParentId!);
+      state = state.copyWith(parentTasks: updatedTasks, rewards: updatedRewards);
 
       if (task != null) {
-        await _notificationProvider.showChildWellbeingNotification(
-          id: taskId.hashCode.abs(),
-          title: 'Mission Approved! 🌟🎉',
-          body: 'Great job! "${task.title}" has been approved.${task.reward != null ? " Reward: ${task.reward}" : ""}',
+        await _taskNotifications.notifyTaskApproved(
+          task: task,
+          unlockedReward: unlockedReward,
         );
+        if (unlockedReward != null) {
+          await _taskNotifications.notifyRewardUnlocked(
+            reward: unlockedReward,
+            childNickname: task.assignedToChildNickname ?? 'Hey',
+          );
+        }
       }
     } catch (e) {
       state = state.copyWith(errorMessage: e.toString());
     }
   }
 
-  Future<void> requestTaskRetry(String taskId, {required String feedback}) async {
+  /// Parent requests another attempt: [submitted] -> [needs_retry].
+  /// A reason is optional; only a parent-provided reason is stored.
+  Future<void> requestTaskRetry(String taskId, {String? feedback}) async {
     try {
       final task = await _missionRepository.getMissionById(taskId);
       await _missionRepository.rejectMissionNeedsRetry(
         taskId,
         feedback: feedback,
       );
-      final updatedTasks = await _missionRepository.getMissionsForParent();
+      final updatedTasks = await _missionRepository.getMissionsForParent(
+        parentId: task?.assignedByParentId,
+      );
       state = state.copyWith(parentTasks: updatedTasks);
 
       if (task != null) {
-        await _notificationProvider.showChildWellbeingNotification(
-          id: taskId.hashCode.abs(),
-          title: 'Mission Needs Another Try 💪',
-          body: 'For "${task.title}": $feedback',
+        await _taskNotifications.notifyTaskNeedsRetry(
+          task: task,
+          parentReason: feedback,
         );
       }
     } catch (e) {
@@ -475,7 +563,9 @@ final parentDashboardControllerProvider =
   final coachingLoop = ref.watch(coachingLoopServiceProvider);
   final goalRepo = ref.watch(localGoalRepositoryProvider);
   final missionRepo = ref.watch(localMissionRepositoryProvider);
+  final rewardRepo = ref.watch(rewardRepositoryProvider);
   final notifProvider = ref.watch(notificationProvider);
+  final realtimeService = ref.watch(missionRealtimeServiceProvider);
 
   return ParentDashboardController(
     familyRepository: familyRepo,
@@ -485,6 +575,8 @@ final parentDashboardControllerProvider =
     coachingLoopService: coachingLoop,
     goalRepository: goalRepo,
     missionRepository: missionRepo,
+    rewardRepository: rewardRepo,
     notificationProvider: notifProvider,
+    realtimeService: realtimeService,
   );
 });

@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:cleartime/core/services/abstractions/local_llm_provider.dart';
+import 'package:cleartime/data/models/llm_models.dart';
 import 'package:cleartime/data/models/usage_models.dart';
 import 'package:cleartime/data/models/mission_model.dart';
 import 'package:cleartime/data/models/goal_model.dart';
@@ -7,7 +9,69 @@ import 'package:cleartime/data/repositories/local_prompt_repository.dart';
 import 'package:cleartime/data/repositories/local_ai_settings_repository.dart';
 import 'package:cleartime/services/llm/local_ai_context_builder.dart';
 import 'package:cleartime/services/llm/local_ai_coach_service.dart';
-import 'package:cleartime/services/llm/on_device_llm_provider.dart';
+
+import '../helpers/encrypted_store_helper.dart';
+
+/// In-memory offline LLM returning an encouraging structured answer, so the
+/// coach service pipeline runs without any native runtime or network access.
+class _FakeOfflineLLMProvider implements LocalLLMProvider {
+  @override
+  Future<bool> isAvailable() async => true;
+
+  @override
+  Future<void> loadModel() async {}
+
+  @override
+  Future<void> loadModelById(String modelId) async {}
+
+  @override
+  Future<void> unloadModel() async {}
+
+  @override
+  Future<String> generate({required String prompt}) async =>
+      '{"answer":"You did wonderfully today! Keep up the great mindful focus.",'
+      '"observations":["Positive reinforcement delivered"],'
+      '"evidence":["Local device facts"],'
+      '"recommendations":["Keep making mindful choices"],"confidence":0.95}';
+
+  @override
+  Future<ModelInfo> getModelInfo() async => const ModelInfo(
+        modelName: 'ClearTime-SLM-Nano',
+        version: '1.0.0',
+        contextLimit: 2048,
+        quantization: 'q4_k_m',
+        sizeMb: 450,
+        isLoaded: true,
+      );
+
+  @override
+  Future<int> getContextLimit() async => 2048;
+
+  @override
+  Future<int> getMemoryUsage() async => 280;
+
+  @override
+  Future<List<LocalModelCatalogEntry>> getInstalledModels() async => [];
+
+  @override
+  Future<List<LocalModelCatalogEntry>> getAvailableModels() async => [];
+
+  @override
+  Future<bool> installModel(String modelId) async => true;
+
+  @override
+  Future<bool> deleteModel(String modelId) async => true;
+
+  @override
+  Future<bool> selectModel(String modelId) async => true;
+
+  @override
+  Future<StructuredAIResponse> testInference({
+    String? modelId,
+    String? testPrompt,
+  }) async =>
+      const StructuredAIResponse(answer: 'Local test OK', confidence: 1.0);
+}
 
 void main() {
   group('Local AI Context Builder and Child Coach Unit Tests', () {
@@ -30,10 +94,8 @@ void main() {
           id: 'm-1',
           title: 'Math Quest',
           description: 'Study 20 min',
-          category: 'Learning',
           type: MissionType.focus,
           targetMinutes: 20,
-          points: 50,
           status: MissionStatus.approved,
         ),
       ];
@@ -80,9 +142,10 @@ void main() {
     });
 
     test('LocalAICoachService answers child prompts with positive reinforcement', () async {
-      final llmProvider = OnDeviceLLMProvider();
-      final promptRepo = InMemoryLocalPromptRepository();
-      final settingsRepo = InMemoryLocalAISettingsRepository();
+      final store = await createTestDeviceStore();
+      final llmProvider = _FakeOfflineLLMProvider();
+      final promptRepo = EncryptedLocalPromptRepository(store: store);
+      final settingsRepo = EncryptedLocalAISettingsRepository(store: store);
 
       final coach = LocalAICoachService(
         llmProvider: llmProvider,

@@ -1,28 +1,28 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/providers/providers.dart';
+import '../../../core/services/task_notification_service.dart';
 import '../../../data/models/mission_model.dart';
+import '../../../data/models/reward_model.dart';
 import '../../../data/models/coaching_models.dart';
 import '../../../data/models/usage_models.dart';
 import '../../../data/repositories/local_mission_repository.dart';
+import '../../../data/repositories/local_reward_repository.dart';
 import '../../../data/repositories/local_achievement_repository.dart';
-import '../../../core/services/abstractions/notification_provider.dart';
 
 class ChildMissionsState {
   final List<ChildMission> missions;
+  final List<Reward> rewards;
   final String? activeChildId;
   final bool isLoading;
   final String? errorMessage;
 
   const ChildMissionsState({
     this.missions = const [],
+    this.rewards = const [],
     this.activeChildId,
     this.isLoading = false,
     this.errorMessage,
   });
-
-  int get totalPoints => missions
-      .where((m) => m.isCompleted)
-      .fold(0, (sum, m) => sum + m.points);
 
   int get availableCount => missions
       .where((m) =>
@@ -48,6 +48,7 @@ class ChildMissionsState {
 
   ChildMissionsState copyWith({
     List<ChildMission>? missions,
+    List<Reward>? rewards,
     String? activeChildId,
     bool? isLoading,
     String? errorMessage,
@@ -55,6 +56,7 @@ class ChildMissionsState {
   }) {
     return ChildMissionsState(
       missions: missions ?? this.missions,
+      rewards: rewards ?? this.rewards,
       activeChildId: activeChildId ?? this.activeChildId,
       isLoading: isLoading ?? this.isLoading,
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
@@ -64,15 +66,18 @@ class ChildMissionsState {
 
 class ChildMissionsController extends StateNotifier<ChildMissionsState> {
   final LocalMissionRepository _repository;
-  final NotificationProvider _notificationProvider;
+  final RewardRepository _rewardRepository;
+  final TaskNotificationService _taskNotifications;
   final LocalAchievementRepository _achievementRepository;
 
   ChildMissionsController({
     required LocalMissionRepository repository,
-    required NotificationProvider notificationProvider,
+    required RewardRepository rewardRepository,
+    required TaskNotificationService taskNotifications,
     required LocalAchievementRepository achievementRepository,
   })  : _repository = repository,
-        _notificationProvider = notificationProvider,
+        _rewardRepository = rewardRepository,
+        _taskNotifications = taskNotifications,
         _achievementRepository = achievementRepository,
         super(const ChildMissionsState()) {
     loadMissions();
@@ -83,8 +88,12 @@ class ChildMissionsController extends StateNotifier<ChildMissionsState> {
     try {
       final targetChildId = childId ?? state.activeChildId;
       final list = await _repository.getMissions(childId: targetChildId);
+      final rewards = targetChildId == null
+          ? const <Reward>[]
+          : await _rewardRepository.getRewardsForChild(targetChildId);
       state = state.copyWith(
         missions: list,
+        rewards: rewards,
         activeChildId: targetChildId,
         isLoading: false,
       );
@@ -93,15 +102,37 @@ class ChildMissionsController extends StateNotifier<ChildMissionsState> {
     }
   }
 
+  /// Real lifecycle transition [assigned|needsRetry] -> [started], performed
+  /// only on an explicit child action. Generates [TASK_STARTED] for the
+  /// assigned parent only after the state change persisted successfully.
   Future<void> startTask(String missionId) async {
     try {
-      await _repository.startMission(missionId);
+      // Ownership validation: only the assigned child can start the task.
+      await _repository.startMission(missionId, childId: state.activeChildId);
+
+      final updated = await _repository.getMissionById(missionId);
       await loadMissions();
+
+      if (updated != null) {
+        final delivered = await _taskNotifications.notifyTaskStarted(updated);
+        if (!delivered) {
+          // Persisted state is authoritative; surface delivery failure
+          // truthfully without rolling back the real start action.
+          state = state.copyWith(
+            errorMessage:
+                'Task started, but the parent notification could not be delivered.',
+          );
+        }
+      }
     } catch (e) {
       state = state.copyWith(errorMessage: e.toString());
     }
   }
 
+  /// Real lifecycle transition [started] -> [submitted] (or straight to
+  /// [approved] when the task config requires no review). Enforces the
+  /// configured proof requirements and generates [TASK_COMPLETED] for the
+  /// parent only after a successful submission.
   Future<void> submitTask(
     String missionId, {
     String? mediaPath,
@@ -114,39 +145,75 @@ class ChildMissionsController extends StateNotifier<ChildMissionsState> {
         mediaPath: mediaPath,
         mediaType: mediaType,
         notes: notes,
+        childId: state.activeChildId,
       );
 
       final updated = await _repository.getMissionById(missionId);
       await loadMissions();
 
-      if (updated != null) {
-        if (updated.status == MissionStatus.submitted) {
-          // Alert parent that task is submitted for review
-          await _notificationProvider.showParentAlertNotification(
-            id: missionId.hashCode.abs(),
-            title: 'Mission Submitted for Review 📋',
-            body:
-                '${updated.assignedToChildNickname ?? "Child"} completed "${updated.title}". Tap to review proof.',
-          );
-        } else if (updated.status == MissionStatus.approved) {
-          // Direct completion celebration
-          await _notificationProvider.showChildWellbeingNotification(
-            id: missionId.hashCode.abs(),
-            title: 'Mission Complete! 🌟🎉',
-            body:
-                'Awesome job completing "${updated.title}"! +${updated.points} XP earned.${updated.reward != null ? " Reward: ${updated.reward}" : ""}',
-          );
+      if (updated == null) return;
 
-          // Update achievements
-          await _achievementRepository.updateAchievementProgress(
-            'ach-focus-starter',
-            updated.targetMinutes,
-            true,
-          );
-        }
+      if (updated.status == MissionStatus.submitted) {
+        // [TASK_COMPLETED] — parent is informed of the real submission.
+        await _taskNotifications.notifyTaskCompleted(updated);
+      } else if (updated.status == MissionStatus.approved) {
+        // No parent approval required by configuration: the unlock condition
+        // is satisfied by the real submission itself.
+        await _unlockRewardIfConfigured(updated);
+        await _taskNotifications.notifyTaskApproved(
+          task: updated,
+          unlockedReward: await _rewardRepository.getRewardForTask(updated.id),
+        );
+
+        // Update achievements through the existing business logic.
+        await _achievementRepository.updateAchievementProgress(
+          'ach-focus-starter',
+          updated.targetMinutes,
+          true,
+        );
       }
     } catch (e) {
       state = state.copyWith(errorMessage: e.toString());
+    }
+  }
+
+  Future<void> _unlockRewardIfConfigured(ChildMission approvedTask) async {
+    final reward = await _rewardRepository.getRewardForTask(approvedTask.id);
+    if (reward == null || !reward.isLocked) return;
+
+    try {
+      final unlocked = await _rewardRepository.unlockReward(reward.id);
+      await _taskNotifications.notifyRewardUnlocked(
+        reward: unlocked,
+        childNickname: approvedTask.assignedToChildNickname ?? 'Hey',
+      );
+      await _reloadRewards();
+    } catch (e) {
+      // Reward unlock failure must not fake success.
+      state = state.copyWith(
+        errorMessage: 'Reward could not be unlocked: ${e.toString()}',
+      );
+    }
+  }
+
+  Future<void> _reloadRewards() async {
+    final childId = state.activeChildId;
+    if (childId == null) return;
+    state = state.copyWith(
+      rewards: await _rewardRepository.getRewardsForChild(childId),
+    );
+  }
+
+  /// Real redemption action performed by the child/family:
+  /// [unlocked] -> [redeemed]. Never happens automatically.
+  Future<void> redeemReward(String rewardId) async {
+    try {
+      await _rewardRepository.redeemReward(rewardId);
+      await _reloadRewards();
+    } catch (e) {
+      state = state.copyWith(
+        errorMessage: 'Reward could not be redeemed: ${e.toString()}',
+      );
     }
   }
 
@@ -163,11 +230,6 @@ class ChildMissionsController extends StateNotifier<ChildMissionsState> {
       );
     } else {
       await _repository.completeMission(id);
-      await _notificationProvider.showChildWellbeingNotification(
-        id: id.hashCode.abs(),
-        title: 'Mission Complete! 🌟',
-        body: 'Great job completing "${mission.title}"! +${mission.points} XP earned.',
-      );
     }
     await loadMissions();
   }
@@ -198,11 +260,15 @@ class ChildMissionsController extends StateNotifier<ChildMissionsState> {
 final childMissionsControllerProvider =
     StateNotifierProvider<ChildMissionsController, ChildMissionsState>((ref) {
   final repo = ref.watch(localMissionRepositoryProvider);
-  final notif = ref.watch(notificationProvider);
+  final rewardRepo = ref.watch(rewardRepositoryProvider);
+  final taskNotifications = TaskNotificationService(
+    notificationProvider: ref.watch(notificationProvider),
+  );
   final achRepo = ref.watch(localAchievementRepositoryProvider);
   return ChildMissionsController(
     repository: repo,
-    notificationProvider: notif,
+    rewardRepository: rewardRepo,
+    taskNotifications: taskNotifications,
     achievementRepository: achRepo,
   );
 });

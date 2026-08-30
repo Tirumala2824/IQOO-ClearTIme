@@ -3,6 +3,7 @@ import '../../data/models/coaching_models.dart';
 import '../../data/models/goal_model.dart';
 import '../../data/models/usage_models.dart';
 import '../../data/repositories/local_goal_repository.dart';
+import '../storage/encrypted_device_store.dart';
 import 'pattern_detection_service.dart';
 import 'coaching_goal_generator.dart';
 import 'package:uuid/uuid.dart';
@@ -12,25 +13,60 @@ import 'package:uuid/uuid.dart';
 /// Usage → Detect Patterns → Create Goal → Attempt Goal →
 /// Measure Results → Evaluate Progress → Generate New Goal → Repeat
 ///
-/// 100% on-device. Never sends data externally.
+/// 100% on-device. Never sends data externally. Session history is persisted
+/// encrypted on the device via EncryptedDeviceStore.
 class CoachingLoopService {
+  static const _sessionsKey = 'sessions';
+
   final UsageDataProvider _usageProvider;
   final PatternDetectionService _patternService;
   final CoachingGoalGenerator _goalGenerator;
   final LocalGoalRepository _goalRepo;
+  final EncryptedDeviceStore? _store;
 
-  /// In-memory coaching session history (pre-seeded with 7-day demo data).
-  final List<CoachingSession> _sessions = [];
+  List<CoachingSession> _sessions = [];
 
   CoachingLoopService({
     required UsageDataProvider usageProvider,
     required PatternDetectionService patternService,
     required CoachingGoalGenerator goalGenerator,
     required LocalGoalRepository goalRepo,
+    EncryptedDeviceStore? store,
   })  : _usageProvider = usageProvider,
         _patternService = patternService,
         _goalGenerator = goalGenerator,
-        _goalRepo = goalRepo;
+        _goalRepo = goalRepo,
+        _store = store;
+
+  /// Loads persisted session history from the encrypted store.
+  Future<void> loadHistory() async {
+    if (_store == null) return;
+    await _store!.initialize();
+    final historyJson = await _store!.getAllJson(
+      EncryptedDeviceStore.coachingSessionsBox,
+      onCorrupt: (key, _) =>
+          _store!.delete(EncryptedDeviceStore.coachingSessionsBox, key),
+    );
+    final sessions = <CoachingSession>[];
+    for (final json in historyJson) {
+      try {
+        sessions.add(CoachingSession.fromJson(json));
+      } catch (_) {
+        // Skip corrupted entries.
+      }
+    }
+    sessions.sort((a, b) => a.date.compareTo(b.date));
+    _sessions = sessions;
+  }
+
+  Future<void> _persistHistory() async {
+    if (_store == null) return;
+    await _store!.putJson(
+      EncryptedDeviceStore.coachingSessionsBox,
+      _sessionsKey,
+      CoachingHistory(sessions: _sessions).toJson(),
+    );
+  }
 
   // ─── Step 1: Collect Usage Data ───
 
@@ -177,16 +213,23 @@ class CoachingLoopService {
     );
 
     // Step 4: Generate new personalized goal
+    // Skip the daily suggestion when a matching AI goal already exists for
+    // today — duplicated suggestions are never persisted.
     final newGoal = await generateGoal(patterns);
-    await _goalRepo.saveGoal(newGoal);
+    final alreadySuggested =
+        await _goalRepo.hasActiveAIGoalForToday(newGoal.type);
+    if (!alreadySuggested) {
+      await _goalRepo.saveGoal(newGoal);
+    }
 
     session = session.copyWith(
-      generatedGoal: newGoal,
+      generatedGoal: alreadySuggested ? null : newGoal,
       status: CoachingSessionStatus.complete,
     );
 
     // Store session
     _sessions.add(session);
+    await _persistHistory();
 
     return session;
   }

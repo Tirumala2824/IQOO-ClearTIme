@@ -47,10 +47,10 @@ class SupabaseAuthRepository implements AuthRepository {
           .from('profiles')
           .select()
           .eq('id', user.id)
-          .maybeSingle();
+          .limit(1);
 
-      if (response == null) return null;
-      return UserProfile.fromJson(response);
+      if (response.isEmpty) return null;
+      return UserProfile.fromJson(response.first);
     } on PostgrestException catch (e) {
       throw AppDatabaseException(e.message);
     } catch (e) {

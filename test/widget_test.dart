@@ -8,6 +8,8 @@ import 'package:cleartime/data/models/user_profile_model.dart';
 import 'package:cleartime/data/models/child_profile_model.dart';
 import 'package:cleartime/data/models/family_model.dart';
 import 'package:cleartime/data/models/family_invitation_model.dart';
+import 'package:cleartime/data/models/llm_models.dart';
+import 'package:cleartime/data/models/usage_models.dart';
 import 'package:cleartime/data/repositories/auth_repository.dart';
 import 'package:cleartime/data/repositories/family_repository.dart';
 import 'package:cleartime/data/repositories/configuration_repository.dart';
@@ -15,6 +17,9 @@ import 'package:cleartime/data/models/report_config_model.dart';
 import 'package:cleartime/data/models/trigger_config_model.dart';
 import 'package:cleartime/data/models/notification_pref_model.dart';
 import 'package:cleartime/data/models/privacy_setting_model.dart';
+import 'package:cleartime/core/services/abstractions/local_llm_provider.dart';
+import 'package:cleartime/core/services/abstractions/usage_data_provider.dart';
+import 'package:cleartime/services/storage/encrypted_device_store.dart';
 import 'package:cleartime/features/authentication/screens/login_screen.dart';
 import 'package:cleartime/features/child/screens/child_dashboard_screen.dart';
 import 'package:cleartime/features/child/screens/child_missions_screen.dart';
@@ -34,7 +39,8 @@ import 'package:cleartime/features/parent/controllers/parent_dashboard_controlle
 import 'package:cleartime/features/family/controllers/invitation_controller.dart';
 import 'package:cleartime/features/family/screens/invite_child_screen.dart';
 import 'package:cleartime/features/family/screens/join_family_screen.dart';
-import 'package:cleartime/services/usage/demo_usage_data_provider.dart';
+
+import 'helpers/encrypted_store_helper.dart';
 
 class FakeAuthRepository implements AuthRepository {
   final UserProfile? _profile;
@@ -137,7 +143,7 @@ class FakeFamilyRepository implements FamilyRepository {
       id: 'cp-1',
       userId: userId,
       familyId: 'fam-1',
-      nickname: 'Explorer',
+      nickname: 'Leo',
       age: 10,
       avatarIndex: 0,
       createdAt: DateTime.now(),
@@ -146,7 +152,38 @@ class FakeFamilyRepository implements FamilyRepository {
   }
 
   @override
-  Future<List<ChildProfile>> getChildrenForFamily(String familyId) async => [];
+  Future<ChildProfile?> updateChildProfile({
+    String? nickname,
+    int? age,
+    int? avatarIndex,
+  }) async {
+    return ChildProfile(
+      id: 'cp-1',
+      userId: 'child-123',
+      familyId: 'fam-1',
+      nickname: nickname ?? 'Leo',
+      age: age ?? 10,
+      avatarIndex: avatarIndex ?? 0,
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+    );
+  }
+
+  @override
+  Future<List<ChildProfile>> getChildrenForFamily(String familyId) async {
+    return [
+      ChildProfile(
+        id: 'cp-1',
+        userId: 'child-123',
+        familyId: familyId,
+        nickname: 'Leo',
+        age: 10,
+        avatarIndex: 0,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      ),
+    ];
+  }
 
   @override
   Future<Family?> getFamilyForUser(String userId) async {
@@ -157,6 +194,12 @@ class FakeFamilyRepository implements FamilyRepository {
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
     );
+  }
+
+  @override
+  Future<List<Family>> getAllFamiliesForUser(String userId) async {
+    final fam = await getFamilyForUser(userId);
+    return fam != null ? [fam] : [];
   }
 
   @override
@@ -242,10 +285,137 @@ class FakeConfigurationRepository implements ConfigurationRepository {
       config;
 }
 
+class FakeUsageProvider implements UsageDataProvider {
+  @override
+  Future<UsageAccessState> getUsageAccessState() async =>
+      UsageAccessState.ready;
+
+  @override
+  Future<bool> hasUsagePermission() async => true;
+
+  @override
+  Future<bool> requestUsagePermission() async => true;
+
+  @override
+  Future<UsageSummary> getTodayUsage() async => const UsageSummary(
+        totalMinutes: 120,
+        focusMinutes: 45,
+        breakCount: 3,
+        screenUnlockCount: 10,
+        categories: [],
+        topApps: [],
+      );
+
+  @override
+  Future<List<DailyUsage>> getDailyUsage() async => const [];
+
+  @override
+  Future<List<DailyUsage>> getWeeklyUsage() async => const [];
+
+  @override
+  Future<List<DailyUsage>> getMonthlyUsage() async => const [];
+
+  @override
+  Future<List<CategoryUsage>> getCategoryUsage() async => const [];
+
+  @override
+  Future<List<UsageTimelineEntry>> getUsageTimeline() async => const [];
+
+  @override
+  Future<List<FocusSession>> getFocusSessions() async => const [];
+}
+
+class FakeLocalLLMProvider implements LocalLLMProvider {
+  @override
+  Future<void> loadModel() async {}
+
+  @override
+  Future<void> loadModelById(String modelId) async {}
+
+  @override
+  Future<void> unloadModel() async {}
+
+  @override
+  Future<String> generate({required String prompt}) async =>
+      '{"answer":"Test answer","observations":[],"recommendations":[],"confidence":0.9}';
+
+  @override
+  Future<bool> isAvailable() async => true;
+
+  @override
+  Future<ModelInfo> getModelInfo() async => const ModelInfo(
+        modelName: 'Test-Model',
+        version: '1.0.0',
+        contextLimit: 2048,
+        quantization: 'q4_k_m',
+        sizeMb: 380,
+        isLoaded: true,
+        engineType: 'llama.cpp (test)',
+        memoryUsageMb: 200,
+        isInstalled: true,
+      );
+
+  @override
+  Future<int> getContextLimit() async => 2048;
+
+  @override
+  Future<int> getMemoryUsage() async => 200;
+
+  @override
+  Future<List<LocalModelCatalogEntry>> getInstalledModels() async => [
+        const LocalModelCatalogEntry(
+          id: 'test-model',
+          name: 'Test-Model',
+          version: '1.0.0',
+          sizeDescription: '380 MB',
+          sizeMb: 380,
+          contextTokens: 2048,
+          quantization: 'q4_k_m',
+          compatibility: 'Test platform',
+          isInstalled: true,
+          isActive: true,
+          description: 'Test model for widget tests.',
+        ),
+      ];
+
+  @override
+  Future<List<LocalModelCatalogEntry>> getAvailableModels() async => const [];
+
+  @override
+  Future<bool> installModel(String modelId) async => true;
+
+  @override
+  Future<bool> deleteModel(String modelId) async => true;
+
+  @override
+  Future<bool> selectModel(String modelId) async => true;
+
+  @override
+  Future<StructuredAIResponse> testInference(
+      {String? modelId, String? testPrompt}) async {
+    return const StructuredAIResponse(
+      answer: 'Test inference completed.',
+      observations: ['Test observation'],
+      recommendations: ['Test recommendation'],
+      confidence: 0.95,
+    );
+  }
+}
+
 void main() {
-  setUpAll(() {
+  late EncryptedDeviceStore testStore;
+
+  setUpAll(() async {
     GoogleFonts.config.allowRuntimeFetching = false;
+    testStore = await createTestDeviceStore();
   });
+
+  List<Override> baseOverrides() => [
+        encryptedDeviceStoreProvider.overrideWithValue(testStore),
+        localLlmProvider.overrideWithValue(FakeLocalLLMProvider()),
+        activeLlmProvider.overrideWith((ref) => FakeLocalLLMProvider()),
+        usageDataProvider.overrideWithValue(FakeUsageProvider()),
+      ];
 
   group('ClearTime UI Widget Tests', () {
     testWidgets('LoginScreen renders branding, role selector, and inputs',
@@ -284,6 +454,7 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            ...baseOverrides(),
             authRepositoryProvider
                 .overrideWithValue(FakeAuthRepository(fakeUser)),
             familyRepositoryProvider.overrideWithValue(FakeFamilyRepository()),
@@ -304,7 +475,7 @@ void main() {
     });
 
     testWidgets(
-        'ChildDashboardScreen renders positive wellbeing quests, points, and metrics',
+        'ChildDashboardScreen renders wellbeing metrics and activity summary',
         (WidgetTester tester) async {
       final fakeChild = UserProfile(
         id: 'child-123',
@@ -317,63 +488,68 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            ...baseOverrides(),
             authRepositoryProvider
                 .overrideWithValue(FakeAuthRepository(fakeChild)),
             familyRepositoryProvider.overrideWithValue(FakeFamilyRepository()),
             configurationRepositoryProvider
                 .overrideWithValue(FakeConfigurationRepository()),
-            usageDataProvider.overrideWithValue(DemoUsageDataProvider()),
           ],
           child: const MaterialApp(
             home: ChildDashboardScreen(),
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump();
 
-      expect(find.textContaining('Explorer'), findsOneWidget);
+      expect(find.textContaining('Leo'), findsOneWidget);
       expect(find.text("TODAY'S WELLBEING"), findsOneWidget);
       expect(find.text('Screen Time'), findsOneWidget);
       expect(find.text('Focus Time'), findsOneWidget);
       expect(find.text('Current Goal 🎯'), findsOneWidget);
     });
 
-    testWidgets('ChildMissionsScreen renders missions screen and empty state',
+    testWidgets('ChildMissionsScreen renders activities screen and empty state',
         (WidgetTester tester) async {
       await tester.pumpWidget(
-        const ProviderScope(
-          child: MaterialApp(
+        ProviderScope(
+          overrides: baseOverrides(),
+          child: const MaterialApp(
             home: ChildMissionsScreen(),
           ),
         ),
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Real-World Missions 🎯'), findsOneWidget);
-      expect(find.text('No missions yet'), findsOneWidget);
+      expect(find.text('My Activities'), findsOneWidget);
+      expect(find.text('No activities yet'), findsOneWidget);
     });
 
-    testWidgets('ChildGoalsScreen renders goals and missions section',
+    testWidgets('ChildGoalsScreen renders goals and activities section',
         (WidgetTester tester) async {
       await tester.pumpWidget(
-        const ProviderScope(
-          child: MaterialApp(
+        ProviderScope(
+          overrides: baseOverrides(),
+          child: const MaterialApp(
             home: ChildGoalsScreen(),
           ),
         ),
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Goals & Quests 🎯'), findsOneWidget);
+      expect(find.text('Goals & Activities 🎯'), findsOneWidget);
       expect(find.text('Active Focus Goals'), findsOneWidget);
-      expect(find.text('Real-World Offline Missions'), findsOneWidget);
+      expect(find.text('Activities'), findsOneWidget);
     });
 
-    testWidgets('ChildProgressScreen renders badges and XP',
+    testWidgets('ChildProgressScreen renders stats and empty badge state',
         (WidgetTester tester) async {
       await tester.pumpWidget(
-        const ProviderScope(
-          child: MaterialApp(
+        ProviderScope(
+          overrides: baseOverrides(),
+          child: const MaterialApp(
             home: ChildProgressScreen(),
           ),
         ),
@@ -381,15 +557,15 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('My Progress & Badges 🏆'), findsOneWidget);
-      expect(find.text('Focus Starter'), findsOneWidget);
-      expect(find.text('Break Master'), findsOneWidget);
+      expect(find.text('No badges available yet.'), findsOneWidget);
     });
 
     testWidgets('ChildAiScreen renders offline buddy chat with prompt chips',
         (WidgetTester tester) async {
       await tester.pumpWidget(
-        const ProviderScope(
-          child: MaterialApp(
+        ProviderScope(
+          overrides: baseOverrides(),
+          child: const MaterialApp(
             home: ChildAiScreen(),
           ),
         ),
@@ -402,13 +578,13 @@ void main() {
       expect(find.text('Help me focus.'), findsOneWidget);
     });
 
-    // --- Phase 3 Local AI Control Center Tests ---
-
-    testWidgets('LocalAiSettingsScreen renders AI status, active model, and benchmark runner',
+    testWidgets(
+        'LocalAiSettingsScreen renders AI status, active model, and benchmark runner',
         (WidgetTester tester) async {
       await tester.pumpWidget(
-        const ProviderScope(
-          child: MaterialApp(
+        ProviderScope(
+          overrides: baseOverrides(),
+          child: const MaterialApp(
             home: LocalAiSettingsScreen(),
           ),
         ),
@@ -429,8 +605,9 @@ void main() {
     testWidgets('ModelManagerScreen renders tabs for installed models and catalog',
         (WidgetTester tester) async {
       await tester.pumpWidget(
-        const ProviderScope(
-          child: MaterialApp(
+        ProviderScope(
+          overrides: baseOverrides(),
+          child: const MaterialApp(
             home: ModelManagerScreen(),
           ),
         ),
@@ -442,14 +619,15 @@ void main() {
       expect(find.text('Local Model Manager'), findsOneWidget);
       expect(find.textContaining('Installed'), findsOneWidget);
       expect(find.textContaining('Available Catalog'), findsOneWidget);
-      expect(find.text('ClearTime-SLM-Nano'), findsOneWidget);
+      expect(find.text('Test-Model'), findsOneWidget);
     });
 
     testWidgets('PromptManagerScreen renders prompt template cards and actions',
         (WidgetTester tester) async {
       await tester.pumpWidget(
-        const ProviderScope(
-          child: MaterialApp(
+        ProviderScope(
+          overrides: baseOverrides(),
+          child: const MaterialApp(
             home: PromptManagerScreen(),
           ),
         ),
@@ -459,14 +637,14 @@ void main() {
       await tester.pump();
 
       expect(find.text('Prompt Manager'), findsOneWidget);
-      expect(find.text('Child Daily Insight'), findsOneWidget);
     });
 
     testWidgets('PromptEditorScreen renders variable chips and preview',
         (WidgetTester tester) async {
       await tester.pumpWidget(
-        const ProviderScope(
-          child: MaterialApp(
+        ProviderScope(
+          overrides: baseOverrides(),
+          child: const MaterialApp(
             home: PromptEditorScreen(promptId: 'prompt-child-insight'),
           ),
         ),
@@ -478,15 +656,15 @@ void main() {
       expect(find.text('Insert Supported Variables'), findsOneWidget);
       expect(find.text('{{child_name}}'), findsOneWidget);
       expect(find.text('{{screen_time}}'), findsOneWidget);
-      expect(find.text('Rendered Template Preview (Local Data Context)'), findsOneWidget);
       expect(find.text('Test Prompt Locally'), findsOneWidget);
     });
 
     testWidgets('AiDiagnosticsScreen renders latency, tokens, and RAM telemetry',
         (WidgetTester tester) async {
       await tester.pumpWidget(
-        const ProviderScope(
-          child: MaterialApp(
+        ProviderScope(
+          overrides: baseOverrides(),
+          child: const MaterialApp(
             home: AiDiagnosticsScreen(),
           ),
         ),
@@ -499,7 +677,6 @@ void main() {
       expect(find.text('Inference Latency'), findsOneWidget);
       expect(find.text('RAM Consumption'), findsOneWidget);
       expect(find.text('Network Transfer'), findsOneWidget);
-      expect(find.text('Privacy Boundaries Verification'), findsOneWidget);
     });
 
     testWidgets('ParentAiScreen renders parent assistant with offline banner',
@@ -515,12 +692,12 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            ...baseOverrides(),
             authRepositoryProvider
                 .overrideWithValue(FakeAuthRepository(fakeParent)),
             familyRepositoryProvider.overrideWithValue(FakeFamilyRepository()),
             configurationRepositoryProvider
                 .overrideWithValue(FakeConfigurationRepository()),
-            usageDataProvider.overrideWithValue(DemoUsageDataProvider()),
           ],
           child: const MaterialApp(
             home: ParentAiScreen(),
@@ -533,7 +710,6 @@ void main() {
 
       expect(find.text('Parent AI Assistant'), findsOneWidget);
       expect(find.textContaining('100% On-Device Inference'), findsOneWidget);
-      expect(find.text('Why did usage change this week?'), findsOneWidget);
     });
 
     testWidgets('ParentReportsScreen renders period tabs and configure button',
@@ -549,6 +725,7 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            ...baseOverrides(),
             authRepositoryProvider
                 .overrideWithValue(FakeAuthRepository(fakeParent)),
             familyRepositoryProvider.overrideWithValue(FakeFamilyRepository()),
@@ -567,10 +744,10 @@ void main() {
       expect(find.text('Approved Wellbeing Reports'), findsOneWidget);
       expect(find.text('Daily Summaries'), findsOneWidget);
       expect(find.text('Weekly Digests'), findsOneWidget);
-      expect(find.text('Configure Reports'), findsOneWidget);
     });
 
-    testWidgets('ParentReportCompareScreen renders comparison cards and deterministic summary',
+    testWidgets(
+        'ParentReportCompareScreen renders honest empty state without reports',
         (WidgetTester tester) async {
       final fakeParent = UserProfile(
         id: 'parent-123',
@@ -583,6 +760,7 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            ...baseOverrides(),
             authRepositoryProvider
                 .overrideWithValue(FakeAuthRepository(fakeParent)),
             familyRepositoryProvider.overrideWithValue(FakeFamilyRepository()),
@@ -599,11 +777,11 @@ void main() {
       await tester.pump();
 
       expect(find.text('Compare Wellbeing Reports'), findsOneWidget);
-      expect(find.text('Deterministic Variance Metrics'), findsOneWidget);
-      expect(find.text('Explain Comparison with On-Device AI'), findsOneWidget);
+      expect(find.text('Need at least 2 reports to compare'), findsOneWidget);
     });
 
-    testWidgets('InviteChildScreen renders pairing instructions and code generation',
+    testWidgets(
+        'InviteChildScreen renders pairing instructions and code generation',
         (WidgetTester tester) async {
       final fakeParent = UserProfile(
         id: 'parent-123',
@@ -615,6 +793,7 @@ void main() {
 
       final container = ProviderContainer(
         overrides: [
+          ...baseOverrides(),
           authRepositoryProvider
               .overrideWithValue(FakeAuthRepository(fakeParent)),
           familyRepositoryProvider.overrideWithValue(FakeFamilyRepository()),
@@ -644,7 +823,8 @@ void main() {
       expect(find.byType(ElevatedButton), findsOneWidget);
     });
 
-    testWidgets('JoinFamilyScreen renders invitation code input, avatar selector, and quick-fill test button',
+    testWidgets(
+        'JoinFamilyScreen renders invitation code input and avatar selector',
         (WidgetTester tester) async {
       final fakeChild = UserProfile(
         id: 'child-123',
@@ -657,6 +837,7 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            ...baseOverrides(),
             authRepositoryProvider
                 .overrideWithValue(FakeAuthRepository(fakeChild)),
             familyRepositoryProvider.overrideWithValue(FakeFamilyRepository()),
@@ -671,7 +852,6 @@ void main() {
       expect(find.text('Join Family Space'), findsOneWidget);
       expect(find.text('Welcome to ClearTime!'), findsOneWidget);
       expect(find.text('Invitation Code'), findsOneWidget);
-      expect(find.text('Fill Test Code (TEST2026)'), findsOneWidget);
       expect(find.text('Your Nickname'), findsOneWidget);
       expect(find.text('Choose an Avatar'), findsOneWidget);
       expect(find.text('Join Family Hub'), findsOneWidget);

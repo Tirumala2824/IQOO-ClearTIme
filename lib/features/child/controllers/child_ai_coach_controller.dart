@@ -43,6 +43,7 @@ class ChildAiCoachController extends StateNotifier<ChildAiCoachState> {
     required LocalAICoachService coachService,
     required LocalAIContextBuilder contextBuilder,
     required Ref ref,
+    String welcomeName = 'Hi there! 👋',
   })  : _coachService = coachService,
         _contextBuilder = contextBuilder,
         _ref = ref,
@@ -51,7 +52,9 @@ class ChildAiCoachController extends StateNotifier<ChildAiCoachState> {
             ChatMessage(
               id: 'msg-welcome',
               text:
-                  "Hi Explorer! 👋 I'm your On-Device Buddy. I live right on your phone without sending any data to the cloud. Ask me anything about your focus or screen habits!",
+                  "$welcomeName I'm your on-device wellbeing buddy. I think "
+                  'right on your phone — no data is sent to the cloud. Ask me '
+                  'about your focus or screen habits!',
               isUser: false,
               timestamp: DateTime.now(),
             ),
@@ -96,6 +99,7 @@ class ChildAiCoachController extends StateNotifier<ChildAiCoachState> {
       final reply = await _coachService.askCoach(
         question: text.trim(),
         context: aiContext,
+        childNickname: dashState.profile?.nickname,
       );
 
       final aiMsg = ChatMessage(
@@ -123,9 +127,15 @@ final childAiCoachControllerProvider =
     StateNotifierProvider<ChildAiCoachController, ChildAiCoachState>((ref) {
   final coach = ref.watch(localAICoachServiceProvider);
   final builder = ref.watch(localAIContextBuilderProvider);
-  return ChildAiCoachController(
-    coachService: coach,
-    contextBuilder: builder,
-    ref: ref,
-  );
+  final childName = ref.read(childDashboardControllerProvider).profile?.nickname;
+    final welcomeName = (childName != null && childName.isNotEmpty)
+        ? 'Hi $childName! 👋'
+        : 'Hi there! 👋';
+
+    return ChildAiCoachController(
+      coachService: coach,
+      contextBuilder: builder,
+      ref: ref,
+      welcomeName: welcomeName,
+    );
 });

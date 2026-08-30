@@ -50,8 +50,9 @@ class LocalModelManager {
   Future<bool> deleteModel(String modelId) async {
     final settings = await _settingsRepo.getSettings();
     if (settings.activeModelId == modelId) {
-      // Switch active model to default before deletion
-      await selectModel('slm-nano-380m');
+      // Clear the active selection rather than pointing at a fabricated
+      // default model.
+      await _settingsRepo.setActiveModelId('');
     }
     return await _llmProvider.deleteModel(modelId);
   }

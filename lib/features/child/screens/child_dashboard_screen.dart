@@ -26,7 +26,12 @@ class _ChildDashboardScreenState extends ConsumerState<ChildDashboardScreen> {
       final childState = ref.read(childDashboardControllerProvider);
       final userId = childState.profile?.userId ?? '';
       ref.read(childDashboardControllerProvider.notifier).loadDashboard(userId);
-      ref.read(childMissionsControllerProvider.notifier).loadMissions(childId: userId);
+      final profile = childState.profile;
+      if (profile != null) {
+        ref
+            .read(childMissionsControllerProvider.notifier)
+            .loadMissions(childId: profile.id);
+      }
     });
   }
 
@@ -61,7 +66,7 @@ class _ChildDashboardScreenState extends ConsumerState<ChildDashboardScreen> {
             : null);
     final patterns = childState.detectedPatterns;
 
-    final childName = profile?.nickname ?? "Explorer";
+    final childName = profile?.nickname ?? "there";
 
     return Scaffold(
       backgroundColor: AppTheme.childSurface,
@@ -112,7 +117,7 @@ class _ChildDashboardScreenState extends ConsumerState<ChildDashboardScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               // Permission banner if usage access needed
-              if (!childState.hasPermission) ...[
+              if (!childState.hasUsageAccess) ...[
                 Container(
                   padding: const EdgeInsets.all(16),
                   margin: const EdgeInsets.only(bottom: 16),
@@ -130,7 +135,8 @@ class _ChildDashboardScreenState extends ConsumerState<ChildDashboardScreen> {
                       const SizedBox(width: 12),
                       const Expanded(
                         child: Text(
-                          'Enable Usage Access to track your daily quests on this phone.',
+                          'Usage access is needed so ClearTime can build your '
+                          'activities and reports from real activity.',
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
@@ -145,12 +151,15 @@ class _ChildDashboardScreenState extends ConsumerState<ChildDashboardScreen> {
                             borderRadius: BorderRadius.circular(12),
                           ),
                         ),
-                        onPressed: () {
-                          ref
-                              .read(childDashboardControllerProvider.notifier)
-                              .requestUsagePermission();
+                        onPressed: () async {
+                          await context.push(AppRoutes.usageAccessSetup);
+                          if (context.mounted) {
+                            await ref
+                                .read(childDashboardControllerProvider.notifier)
+                                .refreshUsageAccess();
+                          }
                         },
-                        child: const Text('Enable'),
+                        child: const Text('Setup'),
                       ),
                     ],
                   ),
@@ -198,7 +207,7 @@ class _ChildDashboardScreenState extends ConsumerState<ChildDashboardScreen> {
                             borderRadius: BorderRadius.circular(16),
                           ),
                           child: Text(
-                            '⭐ ${childState.totalPoints} XP Earned',
+                            '✓ ${childState.completedMissionsCount} activities finished',
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 12,
@@ -332,11 +341,11 @@ class _ChildDashboardScreenState extends ConsumerState<ChildDashboardScreen> {
                                     child: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        const Icon(Icons.forest_rounded,
+                                        const Icon(Icons.timer_outlined,
                                             size: 14, color: AppTheme.childPrimary),
                                         const SizedBox(width: 4),
                                         Text(
-                                          activeMission.category,
+                                          '${activeMission.targetMinutes} min',
                                           style: const TextStyle(
                                             color: AppTheme.childPrimary,
                                             fontSize: 11,
@@ -355,7 +364,7 @@ class _ChildDashboardScreenState extends ConsumerState<ChildDashboardScreen> {
                                       borderRadius: BorderRadius.circular(10),
                                     ),
                                     child: Text(
-                                      '+${activeMission.points} XP',
+                                      activeMission.status.label,
                                       style: const TextStyle(
                                         color: AppTheme.warningOrange,
                                         fontWeight: FontWeight.bold,
@@ -697,7 +706,7 @@ class _ChildDashboardScreenState extends ConsumerState<ChildDashboardScreen> {
                           TextButton.icon(
                             onPressed: () => context.go(AppRoutes.childGoals),
                             icon: const Icon(Icons.arrow_forward_rounded, size: 16),
-                            label: const Text('View All Goals & Quests'),
+                            label: const Text('View All Goals & Activities'),
                           ),
                         ],
                       ),

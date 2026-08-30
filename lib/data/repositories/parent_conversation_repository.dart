@@ -1,4 +1,5 @@
 import '../models/approved_report_model.dart';
+import '../../services/storage/encrypted_device_store.dart';
 
 abstract class ParentConversationRepository {
   Future<List<ParentAIConversation>> getConversations(String childId);
@@ -9,66 +10,90 @@ abstract class ParentConversationRepository {
   Future<void> clearAll();
 }
 
-/// InMemoryParentConversationRepository stores parent AI chats exclusively
-/// on the local parent device with zero cloud sync.
-class InMemoryParentConversationRepository
+/// Encrypted on-device parent AI chat storage. Never synced to a server.
+class EncryptedParentConversationRepository
     implements ParentConversationRepository {
-  final Map<String, ParentAIConversation> _conversations = {};
+  final EncryptedDeviceStore _store;
 
-  InMemoryParentConversationRepository() {
-    _seedDefaultConversation();
-  }
-
-  void _seedDefaultConversation() {
-    final now = DateTime.now();
-    final sampleConvo = ParentAIConversation(
-      id: 'convo-alex-welcome',
-      childId: 'child-1',
-      title: 'Weekly Balance Discussion',
-      selectedReportIds: ['rep-alex-weekly-current'],
-      messages: [
-        ParentChatMessage(
-          id: 'm1',
-          text:
-              'Hello! I am your On-Device Parenting Assistant. I analyze approved wellbeing summaries entirely offline on this device to provide objective habit insights.',
-          isUser: false,
-          timestamp: now.subtract(const Duration(minutes: 10)),
-        ),
-      ],
-      createdAt: now.subtract(const Duration(minutes: 10)),
-      updatedAt: now.subtract(const Duration(minutes: 10)),
-    );
-    _conversations[sampleConvo.id] = sampleConvo;
-  }
+  EncryptedParentConversationRepository({required EncryptedDeviceStore store})
+      : _store = store;
 
   @override
   Future<List<ParentAIConversation>> getConversations(String childId) async {
-    return _conversations.values.where((c) => c.childId == childId).toList()
-      ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    final jsons = await _store.getAllJson(
+      EncryptedDeviceStore.parentConversationsBox,
+      onCorrupt: (key, _) =>
+          _store.delete(EncryptedDeviceStore.parentConversationsBox, key),
+    );
+    final conversations = <ParentAIConversation>[];
+    for (final json in jsons) {
+      try {
+        final convo = ParentAIConversation.fromJson(json);
+        if (convo.childId == childId) conversations.add(convo);
+      } catch (_) {
+        // Skip corrupted entries.
+      }
+    }
+    conversations.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    return conversations;
   }
 
   @override
   Future<ParentAIConversation?> getConversation(String conversationId) async {
-    return _conversations[conversationId];
+    final json = await _store.getJson(
+      EncryptedDeviceStore.parentConversationsBox,
+      conversationId,
+    );
+    if (json == null) return null;
+    try {
+      return ParentAIConversation.fromJson(json);
+    } catch (_) {
+      return null;
+    }
   }
 
   @override
   Future<void> saveConversation(ParentAIConversation conversation) async {
-    _conversations[conversation.id] = conversation;
+    await _store.putJson(
+      EncryptedDeviceStore.parentConversationsBox,
+      conversation.id,
+      conversation.toJson(),
+    );
   }
 
   @override
   Future<void> deleteConversation(String conversationId) async {
-    _conversations.remove(conversationId);
+    await _store.delete(
+      EncryptedDeviceStore.parentConversationsBox,
+      conversationId,
+    );
   }
 
   @override
   Future<void> deleteAllConversations(String childId) async {
-    _conversations.removeWhere((_, c) => c.childId == childId);
+    final conversations = await _allConversations();
+    for (final c in conversations.where((c) => c.childId == childId)) {
+      await deleteConversation(c.id);
+    }
   }
 
   @override
   Future<void> clearAll() async {
-    _conversations.clear();
+    await _store.clearBox(EncryptedDeviceStore.parentConversationsBox);
+  }
+
+  Future<List<ParentAIConversation>> _allConversations() async {
+    final jsons = await _store.getAllJson(
+      EncryptedDeviceStore.parentConversationsBox,
+    );
+    final conversations = <ParentAIConversation>[];
+    for (final json in jsons) {
+      try {
+        conversations.add(ParentAIConversation.fromJson(json));
+      } catch (_) {
+        // Skip corrupted entries.
+      }
+    }
+    return conversations;
   }
 }

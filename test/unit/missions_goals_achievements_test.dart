@@ -5,6 +5,7 @@ import 'package:cleartime/data/models/achievement_model.dart';
 import 'package:cleartime/data/repositories/local_mission_repository.dart';
 import 'package:cleartime/data/repositories/local_goal_repository.dart';
 import 'package:cleartime/data/repositories/local_achievement_repository.dart';
+import '../helpers/encrypted_store_helper.dart';
 
 void main() {
   group('Missions, Goals, and Achievements On-Device Unit Tests', () {
@@ -16,9 +17,7 @@ void main() {
         id: 'm-study-sprint',
         title: 'Study Sprint',
         description: 'Complete 25 minutes of learning',
-        category: TaskCategory.learning,
         targetMinutes: 25,
-        points: 60,
       );
 
       await repo.saveMission(studyMission);
@@ -34,9 +33,13 @@ void main() {
       expect(updated?.completedAt, isNotNull);
     });
 
-    test('LocalGoalRepository creates, updates, and pauses goals', () async {
-      final repo = InMemoryLocalGoalRepository();
+    test('EncryptedLocalGoalRepository creates, updates, and pauses goals', () async {
+      final store = await createTestDeviceStore();
+      final repo = EncryptedLocalGoalRepository(store: store);
       final now = DateTime.now();
+
+      // The repository starts empty; nothing is seeded by the app.
+      expect((await repo.getGoals()).isEmpty, isTrue);
 
       final newGoal = ChildGoal(
         id: 'g-custom-reading',
@@ -49,7 +52,14 @@ void main() {
       );
 
       await repo.saveGoal(newGoal);
-      expect((await repo.getGoals()).length, equals(5));
+      expect((await repo.getGoals()).length, equals(1));
+
+      // A user-created goal is not an AI-generated goal for today.
+      expect(await repo.hasActiveAIGoalForToday(GoalType.dailyFocus), isFalse);
+
+      // An AI-generated goal created today is detected as today's AI goal.
+      await repo.saveGoal(sampleGoal(id: 'g-ai-today'));
+      expect(await repo.hasActiveAIGoalForToday(GoalType.dailyFocus), isTrue);
 
       // Update progress to 20m -> should complete
       await repo.updateGoalProgress('g-custom-reading', 20);
@@ -62,12 +72,27 @@ void main() {
       expect((await repo.getGoalById('g-custom-reading'))?.status, equals(GoalStatus.paused));
     });
 
-    test('LocalAchievementRepository updates badge progress and unlock timestamps', () async {
-      final repo = InMemoryLocalAchievementRepository();
-      final achievements = await repo.getAchievements();
+    test('EncryptedLocalAchievementRepository updates badge progress and unlock timestamps', () async {
+      final store = await createTestDeviceStore();
+      final repo = EncryptedLocalAchievementRepository(store: store);
 
-      final balanceAch = achievements.firstWhere((a) => a.type == AchievementType.sevenDayBalance);
-      expect(balanceAch.isUnlocked, isFalse);
+      // The repository starts empty: no badges are pre-seeded.
+      expect((await repo.getAchievements()).isEmpty, isTrue);
+
+      final balanceAch = ChildAchievement(
+        id: 'ach-seven-day-balance',
+        title: 'Seven Day Balance',
+        description: 'Keep balanced device habits for 7 days.',
+        icon: 'balance',
+        type: AchievementType.sevenDayBalance,
+        requirementValue: 7,
+        requirementLabel: '7 balanced days',
+      );
+
+      await repo.saveAchievement(balanceAch);
+      final saved = await repo.getAchievementById(balanceAch.id);
+      expect(saved, isNotNull);
+      expect(saved!.isUnlocked, isFalse);
 
       // Progress to 7 days
       await repo.updateAchievementProgress(balanceAch.id, 7, true);

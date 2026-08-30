@@ -9,6 +9,7 @@ enum GoalStatus {
   active,
   paused,
   completed,
+  expired,
 }
 
 enum GoalSource {
@@ -28,6 +29,7 @@ class ChildGoal {
   final GoalSource source;
   final String? evaluationResult; // e.g. "improved", "struggled"
   final String? relatedPattern; // description of pattern that triggered this goal
+  final DateTime? expiresAt; // when this goal is no longer valid
   final DateTime createdAt;
   final DateTime? updatedAt;
 
@@ -42,12 +44,18 @@ class ChildGoal {
     this.source = GoalSource.userCreated,
     this.evaluationResult,
     this.relatedPattern,
+    this.expiresAt,
     required this.createdAt,
     this.updatedAt,
   });
 
   bool get isCompleted => currentMinutes >= targetMinutes;
   bool get isAIGenerated => source == GoalSource.aiGenerated;
+  bool get isExpired {
+    if (status == GoalStatus.expired) return true;
+    if (expiresAt != null && DateTime.now().isAfter(expiresAt!)) return true;
+    return false;
+  }
 
   double get progressRatio => targetMinutes > 0
       ? (currentMinutes / targetMinutes).clamp(0.0, 1.0)
@@ -66,6 +74,7 @@ class ChildGoal {
     GoalSource? source,
     String? evaluationResult,
     String? relatedPattern,
+    DateTime? expiresAt,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -80,6 +89,7 @@ class ChildGoal {
       source: source ?? this.source,
       evaluationResult: evaluationResult ?? this.evaluationResult,
       relatedPattern: relatedPattern ?? this.relatedPattern,
+      expiresAt: expiresAt ?? this.expiresAt,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -96,6 +106,7 @@ class ChildGoal {
         'source': source.name,
         'evaluationResult': evaluationResult,
         'relatedPattern': relatedPattern,
+        'expiresAt': expiresAt?.toIso8601String(),
         'createdAt': createdAt.toIso8601String(),
         'updatedAt': updatedAt?.toIso8601String(),
       };
@@ -120,6 +131,9 @@ class ChildGoal {
         ),
         evaluationResult: json['evaluationResult'] as String?,
         relatedPattern: json['relatedPattern'] as String?,
+        expiresAt: json['expiresAt'] != null
+            ? DateTime.parse(json['expiresAt'] as String)
+            : null,
         createdAt: DateTime.parse(json['createdAt'] as String),
         updatedAt: json['updatedAt'] != null
             ? DateTime.parse(json['updatedAt'] as String)

@@ -98,11 +98,11 @@ class _ChildProgressScreenState extends ConsumerState<ChildProgressScreen> {
                 children: [
                   Column(
                     children: [
-                      const Icon(Icons.star_rounded,
+                      const Icon(Icons.task_alt_rounded,
                           color: AppTheme.childAccent, size: 34),
                       const SizedBox(height: 4),
                       Text(
-                        '${missionsState.totalPoints} XP',
+                        '${missionsState.completedCount}',
                         style: const TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.w800,
@@ -110,7 +110,7 @@ class _ChildProgressScreenState extends ConsumerState<ChildProgressScreen> {
                         ),
                       ),
                       const Text(
-                        'Quests XP',
+                        'Finished Activities',
                         style: TextStyle(color: Colors.white70, fontSize: 11),
                       ),
                     ],

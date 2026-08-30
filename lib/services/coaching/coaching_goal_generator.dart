@@ -17,6 +17,7 @@ class CoachingGoalGenerator {
   }) {
     const uuid = Uuid();
     final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
 
     // Determine difficulty adjustment based on recent evaluations
     final difficultyMultiplier = _calculateDifficultyMultiplier(previousEvaluations);
@@ -32,7 +33,14 @@ class CoachingGoalGenerator {
       createdAt: now,
     );
 
-    return goal;
+    // Daily suggestions have a hard validity window: end of today.
+    // Weekly goals retire at the end of the current week.
+    final expiresAt = goal.type == GoalType.weeklyFocus
+        ? today.add(Duration(days: 7 - today.weekday + 1))
+            .subtract(const Duration(seconds: 1))
+        : today.add(const Duration(hours: 23, minutes: 59, seconds: 59));
+
+    return goal.copyWith(expiresAt: expiresAt);
   }
 
   /// Calculates how much to adjust goal difficulty.
@@ -116,7 +124,7 @@ class CoachingGoalGenerator {
           final target = (30 * difficultyMultiplier).round().clamp(15, 90);
           return ChildGoal(
             id: goalId,
-            title: 'Focus Power-Up Challenge',
+            title: 'Focused learning time',
             description:
                 'Reach $target minutes of focused learning today. '
                 'Pick your favorite educational app and dive in!',
@@ -130,7 +138,7 @@ class CoachingGoalGenerator {
           final target = (75 * difficultyMultiplier).round().clamp(45, 120);
           return ChildGoal(
             id: goalId,
-            title: 'Focus Champion Mode',
+            title: 'Keep up the focus',
             description:
                 'You\'re doing great! Push for $target minutes of focused time today. You\'ve got this!',
             type: GoalType.dailyFocus,
@@ -146,7 +154,7 @@ class CoachingGoalGenerator {
           final target = (3 * difficultyMultiplier).round().clamp(2, 6);
           return ChildGoal(
             id: goalId,
-            title: 'Mindful Pause Quest',
+            title: 'Screen breaks today',
             description:
                 'Take $target screen breaks today. After every 20 minutes, '
                 'look away for 20 seconds. Your eyes will thank you!',
@@ -160,7 +168,7 @@ class CoachingGoalGenerator {
           final target = (5 * difficultyMultiplier).round().clamp(4, 8);
           return ChildGoal(
             id: goalId,
-            title: 'Break Master Streak',
+            title: 'Keep your break habit going',
             description:
                 'Keep your awesome break habit going! Aim for $target healthy '
                 'pauses today.',
@@ -177,7 +185,7 @@ class CoachingGoalGenerator {
         final target = (45 * difficultyMultiplier).round().clamp(20, 60);
         return ChildGoal(
           id: goalId,
-          title: 'Balance Explorer Challenge',
+          title: 'Balance play and learning',
           description:
               'Keep recreational time under $target minutes today and try '
               'swapping some play time for creative or learning activities.',

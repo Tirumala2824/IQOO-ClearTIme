@@ -8,9 +8,6 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 class EnvConfig {
   EnvConfig._();
 
-  static const String _defaultSupabaseUrl = 'https://demo.supabase.co';
-  static const String _defaultPublishableKey = 'sb_pub_placeholder';
-
   static Future<void> initialize() async {
     try {
       await dotenv.load(fileName: '.env');
@@ -20,19 +17,22 @@ class EnvConfig {
   }
 
   static String get supabaseUrl {
-    return dotenv.env['SUPABASE_URL'] ?? _defaultSupabaseUrl;
+    return dotenv.env['SUPABASE_URL'] ?? '';
   }
 
   static String get supabasePublishableKey {
-    return dotenv.env['SUPABASE_PUBLISHABLE_KEY'] ?? _defaultPublishableKey;
+    return dotenv.env['SUPABASE_PUBLISHABLE_KEY'] ?? '';
   }
 
   static bool get isConfigured {
     final url = supabaseUrl;
     final key = supabasePublishableKey;
-    return url.isNotEmpty &&
-        url != _defaultSupabaseUrl &&
-        key.isNotEmpty &&
-        key != _defaultPublishableKey;
+    return url.isNotEmpty && key.isNotEmpty;
   }
+
+  /// FCM push delivery stays off until Firebase credentials are provisioned.
+  static bool get enableFcm =>
+      dotenv.env['ENABLE_FCM'] == 'true' &&
+      dotenv.env['FIREBASE_PROJECT_ID'] != null &&
+      dotenv.env['FIREBASE_PROJECT_ID']!.isNotEmpty;
 }

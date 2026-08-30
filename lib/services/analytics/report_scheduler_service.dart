@@ -3,8 +3,11 @@ import '../../data/models/report_config_model.dart';
 import '../../data/models/usage_models.dart';
 import '../../data/repositories/approved_report_repository.dart';
 import '../storage/secure_local_usage_store.dart';
+import 'approved_report_sync_service.dart';
 import 'child_report_builder.dart';
 import 'local_analytics_service.dart';
+import 'report_request_service.dart';
+import 'understand_act_report_builder.dart';
 
 /// Result of an automated report scheduling job.
 class ScheduledReportResult {
@@ -28,19 +31,26 @@ class ReportSchedulerService {
   final LocalAnalyticsService analyticsService;
   final ChildReportBuilder _reportBuilder;
   final ApprovedReportRepository _reportRepo;
+  final UnderstandActReportBuilder _understandActBuilder;
+  final ApprovedReportSyncService? _syncService;
 
   // In-memory processed cache to enforce strict idempotency
   final Set<String> _processedScheduleKeys = {};
 
   ReportSchedulerService({
-    SecureLocalUsageStore? usageStore,
+    required SecureLocalUsageStore usageStore,
     LocalAnalyticsService? analyticsService,
     ChildReportBuilder? reportBuilder,
-    ApprovedReportRepository? reportRepo,
-  })  : _usageStore = usageStore ?? SecureLocalUsageStore(),
+    required ApprovedReportRepository reportRepo,
+    UnderstandActReportBuilder? understandActBuilder,
+    ApprovedReportSyncService? syncService,
+  })  : _usageStore = usageStore,
         analyticsService = analyticsService ?? const LocalAnalyticsService(),
         _reportBuilder = reportBuilder ?? const ChildReportBuilder(),
-        _reportRepo = reportRepo ?? InMemoryApprovedReportRepository();
+        _reportRepo = reportRepo,
+        _understandActBuilder =
+            understandActBuilder ?? const UnderstandActReportBuilder(),
+        _syncService = syncService;
 
   /// Generates a unique, deterministic idempotency key for the scheduled report.
   String generateDeterministicReportKey({
@@ -128,29 +138,26 @@ class ReportSchedulerService {
     final dailyAggregates =
         await _usageStore.getDailyAggregatesInRange(startStr, endStr);
 
-    final List<DailyUsage> currentUsageList = dailyAggregates.isNotEmpty
-        ? dailyAggregates
-            .map((agg) => DailyUsage(
-                  date: DateTime.tryParse(agg.dateString) ?? DateTime.now(),
-                  totalMinutes: agg.totalMinutes,
-                  focusMinutes: (agg.totalMinutes * 0.4).toInt(),
-                  unlockCount: agg.unlockCount,
-                  categoryMinutes: agg.categoryMinutes,
-                ))
-            .toList()
-        : [
-            DailyUsage(
-              date: periodEnd,
-              totalMinutes: 140,
-              focusMinutes: 60,
-              unlockCount: 18,
-              categoryMinutes: const {
-                'Learning': 60,
-                'Utilities': 50,
-                'Entertainment': 30,
-              },
-            )
-          ];
+    if (dailyAggregates.isEmpty) {
+      return ScheduledReportResult(
+        generated: false,
+        reportKey: reportKey,
+        status: 'UNAVAILABLE_NO_LOCAL_DATA',
+      );
+    }
+
+    final List<DailyUsage> currentUsageList = dailyAggregates
+        .map((agg) => DailyUsage(
+              date: DateTime.tryParse(agg.dateString) ?? periodEnd,
+              totalMinutes: agg.totalMinutes,
+              // Focus is derived from the real coarse categories instead of
+              // a fabricated percentage of total screen time.
+              focusMinutes: (agg.categoryMinutes['Education'] ?? 0) +
+                  (agg.categoryMinutes['Creativity'] ?? 0),
+              unlockCount: agg.unlockCount,
+              categoryMinutes: agg.categoryMinutes,
+            ))
+        .toList();
 
     // 4. Local Report Builder with Privacy Filter
     final allowedCategories = config.allowedCategories
@@ -162,29 +169,44 @@ class ReportSchedulerService {
         })
         .toSet();
 
-    final approvedReport = _reportBuilder.buildWeeklyReport(
-      childId: config.childId,
-      childNickname: childNickname,
-      familyId: config.familyId,
-      weekStart: periodStart,
-      weekEnd: periodEnd,
-      dailyUsages: currentUsageList,
-      settings: ParentReportSettings(
-        categories: allowedCategories.isNotEmpty
-            ? allowedCategories
-            : const {
-                ReportCategory.overallUsage,
-                ReportCategory.usageTrend,
-                ReportCategory.focusTime,
-                ReportCategory.goals,
-                ReportCategory.achievements,
-              },
-      ),
-    );
+    final settings = ParentReportSettings(categories: allowedCategories);
+    final approvedReport = switch (periodEnum) {
+      ReportPeriod.daily => _reportBuilder.buildDailyReport(
+          childId: config.childId,
+          childNickname: childNickname,
+          familyId: config.familyId,
+          date: periodStart,
+          currentDaily: currentUsageList.last,
+          settings: settings,
+        ),
+      ReportPeriod.weekly => _reportBuilder.buildWeeklyReport(
+          childId: config.childId,
+          childNickname: childNickname,
+          familyId: config.familyId,
+          weekStart: periodStart,
+          weekEnd: periodEnd,
+          dailyUsages: currentUsageList,
+          settings: settings,
+        ),
+      ReportPeriod.monthly => _reportBuilder.buildMonthlyReport(
+          childId: config.childId,
+          childNickname: childNickname,
+          familyId: config.familyId,
+          year: periodStart.year,
+          month: periodStart.month,
+          totalMinutes: currentUsageList.fold(0, (sum, usage) => sum + usage.totalMinutes),
+          totalFocusMinutes: currentUsageList.fold(0, (sum, usage) => sum + usage.focusMinutes),
+          totalBreakCount: currentUsageList.fold(0, (sum, usage) => sum + usage.unlockCount),
+          categoryDistribution: _aggregateCategories(currentUsageList),
+          settings: settings,
+        ),
+    };
 
     // 5. Store approved report
     await _reportRepo.saveApprovedReport(approvedReport);
     _processedScheduleKeys.add(reportKey);
+
+    await _syncService?.pushSnapshot(approvedReport);
 
     return ScheduledReportResult(
       generated: true,
@@ -194,8 +216,118 @@ class ReportSchedulerService {
     );
   }
 
+  /// Generates a real period report from stored local aggregates for a
+  /// parent report request, in Understand → Act format, and pushes the
+  /// filtered snapshot. Returns [ReportGenerationOutcome.unavailable] with a
+  /// truthful reason when no local aggregates exist for the period.
+  Future<ReportGenerationOutcome> generateForRequest({
+    required String childId,
+    required String childNickname,
+    required String familyId,
+    required ReportPeriod period,
+  }) async {
+    final now = DateTime.now();
+    final current = <DailyAggregate>[];
+    final previous = <DailyAggregate>[];
+
+    final currentStart = _periodStart(period, now);
+    final previousStart = _periodStart(period,
+        currentStart.subtract(const Duration(days: 1)));
+    final previousEnd =
+        currentStart.subtract(const Duration(seconds: 1));
+
+    current.addAll(await _usageStore.getDailyAggregatesInRange(
+      _dateStr(currentStart),
+      _dateStr(now),
+    ));
+    previous.addAll(await _usageStore.getDailyAggregatesInRange(
+      _dateStr(previousStart),
+      _dateStr(previousEnd),
+    ));
+
+    if (current.isEmpty) {
+      return const ReportGenerationOutcome.unavailable(
+        'No local activity was recorded for this period yet.',
+      );
+    }
+
+    final sections = _understandActBuilder.build(
+      current: current,
+      previous: previous,
+      localAiInterpretation: null,
+    );
+
+    final totalMinutes = current.fold<int>(0, (s, a) => s + a.totalMinutes);
+    final focusMinutes = current.fold<int>(0, (s, a) => s + a.focusMinutes);
+    final breakCount = current.fold<int>(0, (s, a) => s + a.breakCount);
+    final currentUsages = current.map(_toDailyUsage).toList();
+
+    final report = _reportBuilder.buildApprovedSnapshot(
+      childId: childId,
+      childNickname: childNickname,
+      familyId: familyId,
+      period: period,
+      periodStart: currentStart,
+      periodEnd: now,
+      facts: ReportFacts(
+        totalScreenMinutes: totalMinutes,
+        previousScreenMinutes:
+            previous.fold<int>(0, (s, a) => s + a.totalMinutes),
+        focusMinutes: focusMinutes,
+        previousFocusMinutes:
+            previous.fold<int>(0, (s, a) => s + a.focusMinutes),
+        breakCount: breakCount,
+        previousBreakCount: previous.fold<int>(0, (s, a) => s + a.breakCount),
+        categoryBreakdown: _aggregateCategories(currentUsages),
+        screenUnlockCount: current.fold<int>(0, (s, a) => s + a.unlockCount),
+      ),
+      understandActSections: sections.toJson(),
+    );
+
+    await _reportRepo.saveApprovedReport(report);
+    await _syncService?.pushSnapshot(report);
+
+    return ReportGenerationOutcome.generated(report);
+  }
+
+  DailyUsage _toDailyUsage(DailyAggregate agg) => DailyUsage(
+        date: DateTime.tryParse(agg.dateString) ?? DateTime.now(),
+        totalMinutes: agg.totalMinutes,
+        focusMinutes: agg.focusMinutes,
+        unlockCount: agg.unlockCount,
+        categoryMinutes: agg.categoryMinutes,
+      );
+
+  DateTime _periodStart(ReportPeriod period, DateTime anchor) {
+    switch (period) {
+      case ReportPeriod.daily:
+        return DateTime(anchor.year, anchor.month, anchor.day);
+      case ReportPeriod.weekly:
+        final startOfWeek =
+            anchor.subtract(Duration(days: anchor.weekday - 1));
+        return DateTime(startOfWeek.year, startOfWeek.month, startOfWeek.day);
+      case ReportPeriod.monthly:
+        return DateTime(anchor.year, anchor.month, 1);
+    }
+  }
+
+  String _dateStr(DateTime date) =>
+      '${date.year.toString().padLeft(4, '0')}-'
+      '${date.month.toString().padLeft(2, '0')}-'
+      '${date.day.toString().padLeft(2, '0')}';
+
   /// Clears schedule cache for resets or testing.
   void clearScheduleCache() {
     _processedScheduleKeys.clear();
+  }
+
+  Map<String, int> _aggregateCategories(List<DailyUsage> usages) {
+    final totals = <String, int>{};
+    for (final usage in usages) {
+      usage.categoryMinutes.forEach((category, minutes) {
+        totals[category] = (totals[category] ?? 0) + minutes;
+      });
+    }
+    return totals;
   }
 }

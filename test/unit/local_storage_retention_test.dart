@@ -5,19 +5,24 @@ import 'package:cleartime/services/storage/secure_local_usage_store.dart';
 import 'package:cleartime/services/storage/retention_config.dart';
 import 'package:cleartime/data/repositories/local_reflection_repository.dart';
 
+import '../helpers/encrypted_store_helper.dart';
+
 void main() {
   group('SecureLocalUsageStore and Retention Cleanup Tests', () {
     late SecureLocalUsageStore store;
     final now = DateTime.now();
 
     setUp(() async {
+      final deviceStore = await createTestDeviceStore();
       store = SecureLocalUsageStore(
+        store: deviceStore,
         retentionConfig: const RetentionConfig(
           rawUsageRetentionDays: 30,
           aggregateRetentionDays: 90,
         ),
       );
-      await store.initialize();
+      // Each test starts from a clean slate (no seeded/sample data).
+      await store.wipeAllLocalData();
     });
 
     test('Saves encrypted usage records and retrieves them cleanly without data loss', () async {
@@ -112,10 +117,15 @@ void main() {
       expect(list.isEmpty, isTrue);
     });
 
-    test('LocalReflectionRepository saves, fetches, and deletes reflections locally', () async {
-      final reflectionRepo = InMemoryLocalReflectionRepository();
+    test('EncryptedLocalReflectionRepository saves, updates, fetches, and deletes reflections locally', () async {
+      final deviceStore = await createTestDeviceStore();
+      final reflectionRepo = EncryptedLocalReflectionRepository(store: deviceStore);
+      await reflectionRepo.clearAllReflections();
+
+      // No seeded reflections: the repository starts empty.
       final initial = await reflectionRepo.getReflections();
-      expect(initial.isNotEmpty, isTrue);
+      expect(initial.isEmpty, isTrue);
+      expect(await reflectionRepo.getCorruptEntryCount(), equals(0));
 
       final newReflection = DailyReflection(
         id: 'ref-custom',
@@ -129,6 +139,25 @@ void main() {
       final today = await reflectionRepo.getTodayReflection();
       expect(today?.mood, equals(ReflectionMood.relaxing));
       expect(today?.notes, contains('peaceful'));
+
+      final byId = await reflectionRepo.getReflectionById('ref-custom');
+      expect(byId, isNotNull);
+      expect(byId?.id, equals('ref-custom'));
+
+      // Update an existing reflection.
+      final updated = DailyReflection(
+        id: 'ref-custom',
+        date: DateTime(now.year, now.month, now.day),
+        mood: ReflectionMood.productive,
+        notes: 'Refocused on my math goals',
+        createdAt: now,
+      );
+      await reflectionRepo.updateReflection(updated);
+      final refetched = await reflectionRepo.getReflectionById('ref-custom');
+      expect(refetched?.mood, equals(ReflectionMood.productive));
+      expect(refetched?.notes, contains('math goals'));
+
+      expect(await reflectionRepo.getCorruptEntryCount(), equals(0));
 
       await reflectionRepo.deleteReflection('ref-custom');
       expect((await reflectionRepo.getReflections()).any((r) => r.id == 'ref-custom'), isFalse);

@@ -101,7 +101,7 @@ class PromptTemplateEngine {
       // Safe default placeholders if context lacks a specific key
       switch (key) {
         case 'child_name':
-          return 'Explorer';
+          return 'your child';
         case 'screen_time':
           return '0 min';
         case 'previous_screen_time':
@@ -115,7 +115,7 @@ class PromptTemplateEngine {
         case 'goal_progress':
           return '0%';
         case 'achievement':
-          return 'Mindful Starter';
+          return 'Getting started';
         case 'break_count':
           return '0';
         case 'completed_missions':

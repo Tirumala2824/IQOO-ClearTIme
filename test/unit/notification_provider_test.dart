@@ -29,7 +29,7 @@ void main() {
         provider.showChildWellbeingNotification(
           id: 101,
           title: 'Mission Complete! 🌟',
-          body: 'You completed today\'s focus quest!',
+          body: 'You finished a focus activity today!',
         ),
         completes,
       );

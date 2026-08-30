@@ -52,6 +52,10 @@ class UsageStatsHandler(private val context: Context) : MethodChannel.MethodCall
                     val data = getAggregatedUsageData(startTime, endTime)
                     result.success(data)
                 }
+                "getDailyBuckets" -> {
+                    val days = (call.argument<Number>("days") ?: 7).toInt()
+                    result.success(getDailyBuckets(days.coerceIn(1, 365)))
+                }
                 "getTimeline" -> {
                     val startTime = (call.argument<Number>("startTime") ?: 0L).toLong()
                     val endTime = (call.argument<Number>("endTime") ?: System.currentTimeMillis()).toLong()
@@ -86,7 +90,7 @@ class UsageStatsHandler(private val context: Context) : MethodChannel.MethodCall
 
     private fun getAggregatedUsageData(startTime: Long, endTime: Long): Map<String, Any> {
         val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
-            ?: return emptyMap()
+            ?: throw IllegalStateException("UsageStats service unavailable on this device")
 
         val statsMap = usageStatsManager.queryAndAggregateUsageStats(startTime, endTime)
         val pm = context.packageManager
@@ -126,8 +130,62 @@ class UsageStatsHandler(private val context: Context) : MethodChannel.MethodCall
         return mapOf(
             "totalMinutes" to totalMinutes,
             "categoryMinutes" to categoryMinutes.mapValues { it.value.toInt() },
-            "topApps" to appSummaries.take(10)
+            "topApps" to appSummaries.take(10),
+            "unlockCount" to countUnlocks(startTime, endTime)
         )
+    }
+
+    /// Counts screen-unlock events in the range as real opening events.
+    private fun countUnlocks(startTime: Long, endTime: Long): Int {
+        val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
+            ?: return 0
+        val events = usageStatsManager.queryEvents(startTime, endTime)
+        val event = UsageEvents.Event()
+        var unlocks = 0
+        while (events.hasNextEvent()) {
+            events.getNextEvent(event)
+            // SCREEN_INTERACTIVE marks an unlock/wake; count each transition.
+            if (event.eventType == UsageEvents.Event.SCREEN_INTERACTIVE) unlocks++
+        }
+        return unlocks
+    }
+
+    /// Real per-day aggregates for the most recent [days] days, oldest first.
+    /// Every requested day returns an entry even when the device recorded no
+    /// usage, so weekly/monthly analytics always see the actual 7/30 days.
+    private fun getDailyBuckets(days: Int): List<Map<String, Any>> {
+        val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
+            ?: throw IllegalStateException("UsageStats service unavailable on this device")
+
+        val cal = Calendar.getInstance()
+        val buckets = mutableListOf<Map<String, Any>>()
+
+        for (i in days - 1 downTo 0) {
+            cal.time = java.util.Date()
+            cal.add(Calendar.DAY_OF_YEAR, -i)
+            cal.set(Calendar.HOUR_OF_DAY, 0)
+            cal.set(Calendar.MINUTE, 0)
+            cal.set(Calendar.SECOND, 0)
+            cal.set(Calendar.MILLISECOND, 0)
+            val dayStart = cal.timeInMillis
+            cal.set(Calendar.HOUR_OF_DAY, 23)
+            cal.set(Calendar.MINUTE, 59)
+            cal.set(Calendar.SECOND, 59)
+            cal.set(Calendar.MILLISECOND, 999)
+            val dayEnd = minOf(cal.timeInMillis, System.currentTimeMillis())
+
+            val dayData = getAggregatedUsageData(dayStart, dayEnd)
+            buckets.add(
+                mapOf(
+                    "dayStart" to dayStart,
+                    "dayEnd" to dayEnd,
+                    "totalMinutes" to (dayData["totalMinutes"] as? Int ?: 0),
+                    "categoryMinutes" to (dayData["categoryMinutes"] as? Map<String, Int> ?: emptyMap<String, Int>()),
+                    "unlockCount" to (dayData["unlockCount"] as? Int ?: 0)
+                )
+            )
+        }
+        return buckets
     }
 
     private fun getUsageTimeline(startTime: Long, endTime: Long): List<Map<String, Any>> {

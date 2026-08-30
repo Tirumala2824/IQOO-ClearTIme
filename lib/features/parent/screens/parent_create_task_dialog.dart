@@ -44,7 +44,6 @@ class _ParentCreateTaskDialogState extends ConsumerState<ParentCreateTaskDialog>
   final _rewardController = TextEditingController();
 
   String? _selectedChildId;
-  String _selectedCategory = TaskCategory.outdoor;
   ProofRequirement _selectedProof = ProofRequirement.noProof;
   DateTime? _selectedDueDate;
   TimeOfDay? _selectedDueTime;
@@ -140,7 +139,6 @@ class _ParentCreateTaskDialogState extends ConsumerState<ParentCreateTaskDialog>
           childNickname: targetChild.nickname,
           title: _titleController.text.trim(),
           description: _descController.text.trim(),
-          category: _selectedCategory,
           durationMinutes: duration,
           dueDate: _combinedDueDateTime,
           proofRequirement: _selectedProof,
@@ -182,7 +180,7 @@ class _ParentCreateTaskDialogState extends ConsumerState<ParentCreateTaskDialog>
           const SizedBox(width: 12),
           const Expanded(
             child: Text(
-              'Assign Offline Mission',
+              'Assign Activity',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
           ),
@@ -304,34 +302,7 @@ class _ParentCreateTaskDialogState extends ConsumerState<ParentCreateTaskDialog>
                 ),
                 const SizedBox(height: 14),
 
-                // 4. Category
-                const Text(
-                  'Category *',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                ),
-                const SizedBox(height: 6),
-                DropdownButtonFormField<String>(
-                  initialValue: _selectedCategory,
-                  decoration: InputDecoration(
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 10),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  items: TaskCategory.all.map((cat) {
-                    return DropdownMenuItem<String>(
-                      value: cat,
-                      child: Text(cat),
-                    );
-                  }).toList(),
-                  onChanged: (val) {
-                    if (val != null) setState(() => _selectedCategory = val);
-                  },
-                ),
-                const SizedBox(height: 14),
-
-                // 5. Duration (Minutes)
+                // 4. Duration (Minutes)
                 const Text(
                   'Expected Duration (Minutes) *',
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
@@ -484,7 +455,7 @@ class _ParentCreateTaskDialogState extends ConsumerState<ParentCreateTaskDialog>
                   ),
                 )
               : const Icon(Icons.send_rounded, size: 18),
-          label: Text(_isSubmitting ? 'Assigning...' : 'Assign Mission'),
+          label: Text(_isSubmitting ? 'Assigning...' : 'Assign Activity'),
         ),
       ],
     );

@@ -3,12 +3,12 @@ const { Client } = require('pg');
 const fs = require('fs');
 const path = require('path');
 
-const candidates = [
-  "postgresql://postgres.bmtadgpkckkgcmvnqobg:IQoobengaluru2908@aws-0-ap-south-1.pooler.supabase.com:5432/postgres",
-  "postgresql://postgres.bmtadgpkckkgcmvnqobg:IQoobengaluru2908@aws-0-ap-south-1.pooler.supabase.com:6543/postgres",
-  "postgresql://postgres.bmtadgpkckkgcmvnqobg:IQoobengaluru2908@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres",
-  "postgresql://postgres.bmtadgpkckkgcmvnqobg:IQoobengaluru2908@aws-0-us-east-1.pooler.supabase.com:5432/postgres",
-];
+const envUrl = process.env.SUPABASE_DATABASE_URL;
+if (!envUrl) {
+  console.error('SUPABASE_DATABASE_URL environment variable is required.');
+  process.exit(1);
+}
+const candidates = [envUrl];
 
 async function tryConnect(connectionString) {
   const client = new Client({

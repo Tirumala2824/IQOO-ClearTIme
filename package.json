@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "ClearTime backend schema and ORM management",
   "scripts": {
+    "migrate": "node scripts/apply_migrations.js",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
     "prisma:pull": "prisma db pull"

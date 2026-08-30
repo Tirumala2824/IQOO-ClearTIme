@@ -1,4 +1,3 @@
-import 'dart:math';
 import 'package:uuid/uuid.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/errors/app_exceptions.dart';
@@ -16,9 +15,19 @@ abstract class FamilyRepository {
 
   Future<Family?> getFamilyForUser(String userId);
 
+  Future<List<Family>> getAllFamiliesForUser(String userId);
+
   Future<List<ChildProfile>> getChildrenForFamily(String familyId);
 
   Future<ChildProfile?> getChildProfileForUser(String userId);
+
+  /// Authorized child profile edit (nickname/age/avatar). Rejects when the
+  /// authenticated user has no child profile.
+  Future<ChildProfile?> updateChildProfile({
+    String? nickname,
+    int? age,
+    int? avatarIndex,
+  });
 
   Future<FamilyInvitation> generateInvitation({
     required String familyId,
@@ -106,18 +115,18 @@ class SupabaseFamilyRepository implements FamilyRepository {
           'quiet_hours_start': '21:00',
           'quiet_hours_end': '07:00',
           'updated_at': nowIso,
-        }, onConflict: 'family_id, user_id');
+        }, onConflict: 'user_id');
       } catch (_) {}
 
       // Step 4: Fetch verified family object
-      final familyRes = await _client
+      final familyRows = await _client
           .from('families')
           .select()
           .eq('id', familyId)
-          .maybeSingle();
+          .limit(1);
 
-      if (familyRes != null) {
-        return Family.fromJson(familyRes);
+      if (familyRows.isNotEmpty) {
+        return Family.fromJson(familyRows.first);
       }
 
       return Family(
@@ -138,22 +147,75 @@ class SupabaseFamilyRepository implements FamilyRepository {
   @override
   Future<Family?> getFamilyForUser(String userId) async {
     try {
-      final membership = await _client
+      final memberships = await _client
           .from('family_members')
           .select('family_id, families(*)')
           .eq('user_id', userId)
-          .maybeSingle();
+          .order('joined_at', ascending: false);
 
-      if (membership == null || membership['families'] == null) {
-        return null;
+      if (memberships.isNotEmpty) {
+        for (final m in memberships) {
+          if (m['families'] != null && m['families'] is Map<String, dynamic>) {
+            return Family.fromJson(m['families'] as Map<String, dynamic>);
+          }
+        }
       }
 
-      return Family.fromJson(membership['families'] as Map<String, dynamic>);
+      // Fallback: check if user is admin_user_id directly on families table
+      final directFamilies = await _client
+          .from('families')
+          .select()
+          .eq('admin_user_id', userId)
+          .order('created_at', ascending: false)
+          .limit(1);
+
+      if (directFamilies.isNotEmpty) {
+        return Family.fromJson(directFamilies.first);
+      }
+
+      return null;
     } on PostgrestException catch (e) {
       throw AppDatabaseException('Error loading family: ${e.message}');
     } catch (e) {
       throw AppDatabaseException('Unexpected error loading family: $e');
     }
+  }
+
+  @override
+  Future<List<Family>> getAllFamiliesForUser(String userId) async {
+    final Map<String, Family> familiesMap = {};
+
+    try {
+      // 1. Fetch from family_members table
+      final memberships = await _client
+          .from('family_members')
+          .select('family_id, families(*)')
+          .eq('user_id', userId)
+          .order('joined_at', ascending: false);
+
+      for (final m in memberships) {
+        if (m['families'] != null && m['families'] is Map<String, dynamic>) {
+          final f = Family.fromJson(m['families'] as Map<String, dynamic>);
+          familiesMap[f.id] = f;
+        }
+      }
+    } catch (_) {}
+
+    try {
+      // 2. Fetch families where user is admin_user_id
+      final directFamilies = await _client
+          .from('families')
+          .select()
+          .eq('admin_user_id', userId)
+          .order('created_at', ascending: false);
+
+      for (final json in directFamilies) {
+        final f = Family.fromJson(json);
+        familiesMap[f.id] = f;
+      }
+    } catch (_) {}
+
+    return familiesMap.values.toList();
   }
 
   @override
@@ -182,14 +244,39 @@ class SupabaseFamilyRepository implements FamilyRepository {
           .from('child_profiles')
           .select()
           .eq('user_id', userId)
-          .maybeSingle();
+          .order('created_at', ascending: false)
+          .limit(1);
 
-      if (response == null) return null;
-      return ChildProfile.fromJson(response);
+      if (response.isEmpty) return null;
+      return ChildProfile.fromJson(response.first);
     } on PostgrestException catch (e) {
       throw AppDatabaseException('Error loading child profile: ${e.message}');
     } catch (e) {
       throw AppDatabaseException('Unexpected error loading child profile: $e');
+    }
+  }
+
+  @override
+  Future<ChildProfile?> updateChildProfile({
+    String? nickname,
+    int? age,
+    int? avatarIndex,
+  }) async {
+    try {
+      final response = await _client.rpc(
+        'update_child_profile',
+        params: {
+          'p_nickname': nickname,
+          'p_age': age,
+          'p_avatar_index': avatarIndex,
+        },
+      );
+      if (response == null) return null;
+      return ChildProfile.fromJson(Map<String, dynamic>.from(response as Map));
+    } on PostgrestException catch (e) {
+      throw AppDatabaseException('Error updating child profile: ${e.message}');
+    } catch (e) {
+      throw AppDatabaseException('Unexpected error updating child profile: $e');
     }
   }
 
@@ -205,6 +292,15 @@ class SupabaseFamilyRepository implements FamilyRepository {
         familyId: familyId,
       );
       final expiresAt = DateTime.now().add(AppConstants.invitationExpiry);
+
+      // Ensure profile exists in profiles table to satisfy foreign key constraint
+      try {
+        await _client.from('profiles').upsert({
+          'id': createdBy,
+          'role': 'PARENT',
+          'updated_at': DateTime.now().toIso8601String(),
+        }, onConflict: 'id');
+      } catch (_) {}
 
       final response = await _client
           .from('family_invitations')
@@ -226,6 +322,7 @@ class SupabaseFamilyRepository implements FamilyRepository {
     } on PostgrestException catch (e) {
       throw AppDatabaseException('Failed to generate invitation: ${e.message}');
     } catch (e) {
+      if (e is AppException) rethrow;
       throw AppDatabaseException('Unexpected error generating invitation: $e');
     }
   }
@@ -275,23 +372,6 @@ class SupabaseFamilyRepository implements FamilyRepository {
   }) async {
     final cleanCode = SecureTokenGenerator.parseInvitationCode(invitationCode);
 
-    // Fast-path for testing/demo invitation codes
-    if (cleanCode == 'TEST2026' ||
-        cleanCode == 'DEMO2026' ||
-        cleanCode == 'CLEARTIM') {
-      final now = DateTime.now();
-      return ChildProfile(
-        id: 'child-${childUserId.substring(0, min(8, childUserId.length))}',
-        userId: childUserId,
-        familyId: 'fam-demo-test',
-        nickname: nickname.isNotEmpty ? nickname : 'Explorer',
-        age: age ?? 11,
-        avatarIndex: avatarIndex,
-        createdAt: now,
-        updatedAt: now,
-      );
-    }
-
     try {
       // 1. Try atomic database RPC function first
       try {
@@ -309,17 +389,20 @@ class SupabaseFamilyRepository implements FamilyRepository {
         if (profile != null) return profile;
       } catch (rpcError) {
         // 2. Direct database table fallback
-        final invRes = await _client
+        final invRows = await _client
             .from('family_invitations')
             .select()
             .eq('invitation_code', cleanCode)
             .eq('status', 'ACTIVE')
-            .maybeSingle();
+            .order('created_at', ascending: false)
+            .limit(1);
 
-        if (invRes == null) {
+        if (invRows.isEmpty) {
           throw const AppInvitationException(
               'Invalid or expired invitation code.');
         }
+
+        final invRes = invRows.first;
 
         final familyId = invRes['family_id'] as String;
         final invId = invRes['id'] as String;
@@ -327,7 +410,7 @@ class SupabaseFamilyRepository implements FamilyRepository {
 
         // Mark invitation used
         await _client.from('family_invitations').update({
-          'status': 'REDEEMED',
+          'status': 'USED',
           'used_count': 1,
         }).eq('id', invId);
 

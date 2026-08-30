@@ -191,10 +191,11 @@ class SupabaseConfigurationRepository implements ConfigurationRepository {
           .from('notification_preferences')
           .select()
           .eq('user_id', userId)
-          .maybeSingle();
+          .order('updated_at', ascending: false)
+          .limit(1);
 
-      if (response == null) return null;
-      return NotificationPreference.fromJson(response);
+      if (response.isEmpty) return null;
+      return NotificationPreference.fromJson(response.first);
     } on PostgrestException catch (e) {
       throw AppDatabaseException(
           'Error loading notification preferences: ${e.message}');
@@ -211,11 +212,11 @@ class SupabaseConfigurationRepository implements ConfigurationRepository {
         ..['updated_at'] = DateTime.now().toIso8601String();
       final response = await _client
           .from('notification_preferences')
-          .upsert(payload)
+          .upsert(payload, onConflict: 'user_id')
           .select()
-          .single();
+          .limit(1);
 
-      return NotificationPreference.fromJson(response);
+      return NotificationPreference.fromJson(response.first);
     } on PostgrestException catch (e) {
       throw AppDatabaseException(
           'Failed to save notification preferences: ${e.message}');
@@ -235,10 +236,11 @@ class SupabaseConfigurationRepository implements ConfigurationRepository {
           .select()
           .eq('family_id', familyId)
           .eq('user_id', userId)
-          .maybeSingle();
+          .order('updated_at', ascending: false)
+          .limit(1);
 
-      if (response == null) return null;
-      return PrivacySetting.fromJson(response);
+      if (response.isEmpty) return null;
+      return PrivacySetting.fromJson(response.first);
     } on PostgrestException catch (e) {
       throw AppDatabaseException(
           'Error loading privacy settings: ${e.message}');
