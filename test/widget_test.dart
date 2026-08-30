@@ -17,6 +17,10 @@ import 'package:cleartime/data/models/report_config_model.dart';
 import 'package:cleartime/data/models/trigger_config_model.dart';
 import 'package:cleartime/data/models/notification_pref_model.dart';
 import 'package:cleartime/data/models/privacy_setting_model.dart';
+import 'package:cleartime/data/models/goal_model.dart';
+import 'package:cleartime/data/repositories/local_ai_settings_repository.dart';
+import 'package:cleartime/data/repositories/local_goal_repository.dart';
+import 'package:cleartime/data/repositories/local_mission_repository.dart';
 import 'package:cleartime/core/services/abstractions/local_llm_provider.dart';
 import 'package:cleartime/core/services/abstractions/usage_data_provider.dart';
 import 'package:cleartime/services/agent/autonomous_agent_engine.dart';
@@ -41,6 +45,12 @@ import 'package:cleartime/features/parent/controllers/parent_dashboard_controlle
 import 'package:cleartime/features/family/controllers/invitation_controller.dart';
 import 'package:cleartime/features/family/screens/invite_child_screen.dart';
 import 'package:cleartime/features/family/screens/join_family_screen.dart';
+import 'package:cleartime/features/parent/screens/parent_dashboard_screen.dart';
+import 'package:cleartime/features/parent/screens/parent_tasks_screen.dart';
+import 'package:cleartime/features/parent/screens/parent_triggers_screen.dart';
+import 'package:cleartime/features/parent/screens/parent_settings_screen.dart';
+import 'package:cleartime/features/parent/screens/privacy_center_screen.dart';
+import 'package:cleartime/features/child/screens/child_settings_screen.dart';
 
 import 'helpers/encrypted_store_helper.dart';
 
@@ -421,6 +431,83 @@ class FakeLocalLLMProvider implements LocalLLMProvider {
   }
 }
 
+class FakeLocalAISettingsRepository implements LocalAISettingsRepository {
+  AISettings _settings = const AISettings(
+    isAiEnabled: true,
+    activeModelId: 'test-model',
+  );
+
+  @override
+  Future<AISettings> getSettings() async => _settings;
+
+  @override
+  Future<void> saveSettings(AISettings settings) async => _settings = settings;
+
+  @override
+  Future<void> updateSettings(AISettings settings) async => _settings = settings;
+
+  @override
+  Future<void> setAiEnabled(bool enabled) async =>
+      _settings = _settings.copyWith(isAiEnabled: enabled);
+
+  @override
+  Future<void> setActiveModelId(String modelId) async =>
+      _settings = _settings.copyWith(activeModelId: modelId);
+
+  @override
+  Future<void> resetToDefaults() async => _settings = const AISettings();
+}
+
+class FakeLocalGoalRepository implements LocalGoalRepository {
+  final List<ChildGoal> _goals = [];
+
+  @override
+  Future<List<ChildGoal>> getGoals() async => _goals;
+
+  @override
+  Future<ChildGoal?> getGoalById(String id) async =>
+      _goals.where((g) => g.id == id).firstOrNull;
+
+  @override
+  Future<void> saveGoal(ChildGoal goal) async {
+    _goals.removeWhere((g) => g.id == goal.id);
+    _goals.add(goal);
+  }
+
+  @override
+  Future<void> updateGoalProgress(String id, int minutes) async {
+    final idx = _goals.indexWhere((g) => g.id == id);
+    if (idx != -1) {
+      _goals[idx] = _goals[idx].copyWith(currentMinutes: minutes);
+    }
+  }
+
+  @override
+  Future<void> updateGoalStatus(String id, GoalStatus status) async {
+    final idx = _goals.indexWhere((g) => g.id == id);
+    if (idx != -1) {
+      _goals[idx] = _goals[idx].copyWith(status: status);
+    }
+  }
+
+  @override
+  Future<void> deleteGoal(String id) async =>
+      _goals.removeWhere((g) => g.id == id);
+
+  @override
+  Future<ChildGoal?> getActiveAIGoal() async => _goals
+      .where((g) =>
+          g.source == GoalSource.aiGenerated &&
+          g.status != GoalStatus.completed)
+      .firstOrNull;
+
+  @override
+  Future<List<ChildGoal>> getGoalHistory() async => _goals;
+
+  @override
+  Future<bool> hasActiveAIGoalForToday(GoalType type) async => false;
+}
+
 void main() {
   late EncryptedDeviceStore testStore;
 
@@ -431,6 +518,12 @@ void main() {
 
   List<Override> baseOverrides() => [
         encryptedDeviceStoreProvider.overrideWithValue(testStore),
+        localAISettingsRepositoryProvider
+            .overrideWithValue(FakeLocalAISettingsRepository()),
+        localGoalRepositoryProvider
+            .overrideWithValue(FakeLocalGoalRepository()),
+        localMissionRepositoryProvider
+            .overrideWithValue(InMemoryLocalMissionRepository()),
         localLlmProvider.overrideWithValue(FakeLocalLLMProvider()),
         activeLlmProvider.overrideWith((ref) => FakeLocalLLMProvider()),
         usageDataProvider.overrideWithValue(FakeUsageProvider()),
@@ -564,7 +657,11 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump();
 
       expect(find.text('Goals & Activities'), findsOneWidget);
       expect(find.text('Active Focus Goals'), findsOneWidget);
@@ -581,7 +678,10 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump();
 
       expect(find.text('My Progress & Badges'), findsOneWidget);
       expect(find.text('Wellbeing Badges 🏆'), findsOneWidget);
@@ -597,7 +697,10 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump();
 
       expect(find.text('Mindful Buddy Agent 🤖'), findsOneWidget);
       expect(find.textContaining('100% On-Device'), findsOneWidget);
@@ -616,6 +719,7 @@ void main() {
           ),
         ),
       );
+      await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
       await tester.pump(const Duration(milliseconds: 200));
       await tester.pump();
@@ -639,7 +743,11 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump();
 
       expect(find.text('Local Model Manager'), findsOneWidget);
       expect(find.textContaining('Installed'), findsOneWidget);
@@ -870,7 +978,9 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump();
 
       expect(find.text('Invite Child to Family'), findsOneWidget);
       expect(find.text('Pair Child Device Securely'), findsOneWidget);
@@ -901,7 +1011,9 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump();
 
       expect(find.text('Join Family Space'), findsOneWidget);
       expect(find.text('Welcome to ClearTime!'), findsOneWidget);
@@ -912,7 +1024,7 @@ void main() {
     });
 
     testWidgets(
-        'Responsive layout renders overflow-free at 200px width for ParentAiScreen',
+        'Responsive layout renders overflow-free at 200px width for Parent screens',
         (WidgetTester tester) async {
       tester.view.physicalSize = const Size(200, 600);
       tester.view.devicePixelRatio = 1.0;
@@ -941,6 +1053,19 @@ void main() {
           .read(parentDashboardControllerProvider.notifier)
           .loadDashboard('parent-123');
 
+      // ParentDashboardScreen
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(
+            home: ParentDashboardScreen(),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(tester.takeException(), isNull);
+
+      // ParentAiScreen
       await tester.pumpWidget(
         UncontrolledProviderScope(
           container: container,
@@ -950,12 +1075,159 @@ void main() {
         ),
       );
       await tester.pump(const Duration(milliseconds: 200));
+      expect(tester.takeException(), isNull);
 
+      // ParentReportsScreen
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(
+            home: ParentReportsScreen(),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(tester.takeException(), isNull);
+
+      // ParentReportCompareScreen
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(
+            home: ParentReportCompareScreen(),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(tester.takeException(), isNull);
+
+      // ParentTasksScreen
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(
+            home: ParentTasksScreen(),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(tester.takeException(), isNull);
+
+      // ParentTriggersScreen
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(
+            home: ParentTriggersScreen(),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(tester.takeException(), isNull);
+
+      // ParentSettingsScreen
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(
+            home: ParentSettingsScreen(),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(tester.takeException(), isNull);
+
+      // PrivacyCenterScreen
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(
+            home: PrivacyCenterScreen(),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 200));
       expect(tester.takeException(), isNull);
     });
 
     testWidgets(
-        'Responsive layout renders overflow-free at 200px width for ChildDashboardScreen',
+        'Responsive layout renders overflow-free at 200px width for Local AI Control Center screens',
+        (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(200, 600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final fakeParent = UserProfile(
+        id: 'parent-123',
+        role: UserRole.parent,
+        email: 'parent@example.com',
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+
+      final container = ProviderContainer(
+        overrides: [
+          ...baseOverrides(),
+          authRepositoryProvider
+              .overrideWithValue(FakeAuthRepository(fakeParent)),
+          familyRepositoryProvider.overrideWithValue(FakeFamilyRepository()),
+          configurationRepositoryProvider
+              .overrideWithValue(FakeConfigurationRepository()),
+        ],
+      );
+
+      // LocalAiSettingsScreen
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(
+            home: LocalAiSettingsScreen(),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(tester.takeException(), isNull);
+
+      // ModelManagerScreen
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(
+            home: ModelManagerScreen(),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(tester.takeException(), isNull);
+
+      // PromptManagerScreen
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(
+            home: PromptManagerScreen(),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(tester.takeException(), isNull);
+
+      // AiDiagnosticsScreen
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(
+            home: AiDiagnosticsScreen(),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets(
+        'Responsive layout renders overflow-free at 200px width for Child screens',
         (WidgetTester tester) async {
       tester.view.physicalSize = const Size(200, 600);
       tester.view.devicePixelRatio = 1.0;
@@ -970,28 +1242,92 @@ void main() {
         updatedAt: DateTime.now(),
       );
 
+      final container = ProviderContainer(
+        overrides: [
+          ...baseOverrides(),
+          authRepositoryProvider
+              .overrideWithValue(FakeAuthRepository(fakeChild)),
+          familyRepositoryProvider.overrideWithValue(FakeFamilyRepository()),
+          configurationRepositoryProvider
+              .overrideWithValue(FakeConfigurationRepository()),
+        ],
+      );
+
+      // ChildDashboardScreen
       await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            ...baseOverrides(),
-            authRepositoryProvider
-                .overrideWithValue(FakeAuthRepository(fakeChild)),
-            familyRepositoryProvider.overrideWithValue(FakeFamilyRepository()),
-            configurationRepositoryProvider
-                .overrideWithValue(FakeConfigurationRepository()),
-          ],
+        UncontrolledProviderScope(
+          container: container,
           child: const MaterialApp(
             home: ChildDashboardScreen(),
           ),
         ),
       );
       await tester.pump(const Duration(milliseconds: 200));
+      expect(tester.takeException(), isNull);
 
+      // ChildMissionsScreen
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(
+            home: ChildMissionsScreen(),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(tester.takeException(), isNull);
+
+      // ChildGoalsScreen
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(
+            home: ChildGoalsScreen(),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(tester.takeException(), isNull);
+
+      // ChildProgressScreen
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(
+            home: ChildProgressScreen(),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(tester.takeException(), isNull);
+
+      // ChildAiScreen
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(
+            home: ChildAiScreen(),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(tester.takeException(), isNull);
+
+      // ChildSettingsScreen
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(
+            home: ChildSettingsScreen(),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 200));
       expect(tester.takeException(), isNull);
     });
 
     testWidgets(
-        'Responsive layout renders overflow-free at 200px width for InviteChildScreen & JoinFamilyScreen',
+        'Responsive layout renders overflow-free at 200px width for Auth & Family screens',
         (WidgetTester tester) async {
       tester.view.physicalSize = const Size(200, 600);
       tester.view.devicePixelRatio = 1.0;
@@ -1020,6 +1356,31 @@ void main() {
           .read(parentDashboardControllerProvider.notifier)
           .loadDashboard('parent-123');
 
+      // LoginScreen
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(
+            home: LoginScreen(),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(tester.takeException(), isNull);
+
+      // OnboardingScreen
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(
+            home: OnboardingScreen(),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(tester.takeException(), isNull);
+
+      // InviteChildScreen
       await tester.pumpWidget(
         UncontrolledProviderScope(
           container: container,
@@ -1029,7 +1390,18 @@ void main() {
         ),
       );
       await tester.pump(const Duration(milliseconds: 200));
+      expect(tester.takeException(), isNull);
 
+      // JoinFamilyScreen
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(
+            home: JoinFamilyScreen(),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 200));
       expect(tester.takeException(), isNull);
     });
   });
